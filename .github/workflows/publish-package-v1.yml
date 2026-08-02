@@ -1,0 +1,141 @@
+name: Publish Package v1
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Immutable 40-character Kosmos commit SHA
+        required: true
+        type: string
+      sequence:
+        description: Strictly increasing catalog sequence
+        required: true
+        type: string
+      issued_at:
+        description: Catalog issued-at ISO UTC timestamp
+        required: true
+        type: string
+      expires_at:
+        description: Catalog expiry ISO UTC timestamp (at most 366 days later)
+        required: true
+        type: string
+
+jobs:
+  publish:
+    environment: production
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable Kosmos source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ksanrse/kosmos
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.KOSMOS_SOURCE_REPO_TOKEN }}
+          path: kosmos-source
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - name: Build, sign, validate, and publish immutable artifacts
+        env:
+          GH_TOKEN: ${{ secrets.KOSMOS_RELEASE_REPO_TOKEN }}
+          KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY: ${{ secrets.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          CATALOG_SEQUENCE: ${{ inputs.sequence }}
+          CATALOG_ISSUED_AT: ${{ inputs.issued_at }}
+          CATALOG_EXPIRES_AT: ${{ inputs.expires_at }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "source_ref must be a full immutable commit SHA" >&2
+            exit 1
+          fi
+          SOURCE_ROOT="$GITHUB_WORKSPACE/kosmos-source"
+          KEY_PATH="$RUNNER_TEMP/kosmos-release-private.pem"
+          trap 'rm -f -- "$KEY_PATH"' EXIT
+          if [[ -z "${KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY:-}" ]]; then
+            echo "KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY is required" >&2
+            exit 1
+          fi
+          KEY_PATH="$KEY_PATH" node <<'NODE'
+          const fs = require("node:fs");
+          fs.writeFileSync(process.env.KEY_PATH, process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY, {
+            mode: 0o600,
+          });
+          delete process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY;
+          NODE
+          unset KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY
+          chmod 600 "$KEY_PATH"
+
+          cd "$SOURCE_ROOT"
+          bun install --frozen-lockfile
+          bun run --cwd products/shell build
+          bun run --cwd products/shell test
+          export KOSMOS_PACKAGE_SIGNER="kosmos-release-2026=$KEY_PATH"
+          export KOSMOS_PACKAGE_SEQUENCE="$CATALOG_SEQUENCE"
+          export KOSMOS_PACKAGE_ISSUED_AT="$CATALOG_ISSUED_AT"
+          export KOSMOS_PACKAGE_EXPIRES_AT="$CATALOG_EXPIRES_AT"
+          bun run --cwd products/shell package:v1
+
+          PACKAGE_ID="$(node -p 'JSON.parse(require("fs").readFileSync("products/shell/manifest.json", "utf8")).id')"
+          PACKAGE_VERSION="$(node -p 'JSON.parse(require("fs").readFileSync("products/shell/manifest.json", "utf8")).version')"
+          PACKAGE_DIR="$SOURCE_ROOT/products/shell/.tmp/package"
+          ARCHIVE="$PACKAGE_DIR/package.kspkg"
+          VERSIONED_ARCHIVE="$PACKAGE_DIR/${PACKAGE_ID}-${PACKAGE_VERSION}.kspkg"
+          CATALOG="$PACKAGE_DIR/catalog.json"
+          ENVELOPE="$PACKAGE_DIR/catalog.envelope.json"
+          SIGNATURES="$PACKAGE_DIR/catalog.signatures.json"
+          test -f "$ARCHIVE"
+          mv -- "$ARCHIVE" "$VERSIONED_ARCHIVE"
+          export PACKAGE_ID PACKAGE_VERSION VERSIONED_ARCHIVE CATALOG ENVELOPE SIGNATURES
+          node <<'NODE'
+          const fs = require("node:fs");
+          const crypto = require("node:crypto");
+          const catalogBytes = fs.readFileSync(process.env.CATALOG);
+          const catalog = JSON.parse(catalogBytes);
+          const entry = catalog.packages?.[0];
+          const archiveBytes = fs.readFileSync(process.env.VERSIONED_ARCHIVE);
+          const expectedUrl = `https://github.com/makekosmos/shell/releases/download/v${process.env.PACKAGE_VERSION}/${process.env.PACKAGE_ID}-${process.env.PACKAGE_VERSION}.kspkg`;
+          if (catalog.sequence !== Number(process.env.CATALOG_SEQUENCE) ||
+              catalog.issued_at !== process.env.CATALOG_ISSUED_AT ||
+              catalog.expires_at !== process.env.CATALOG_EXPIRES_AT ||
+              !entry || entry.manifest.id !== process.env.PACKAGE_ID ||
+              entry.manifest.version !== process.env.PACKAGE_VERSION ||
+              entry.archive_url !== expectedUrl ||
+              entry.size !== archiveBytes.length ||
+              entry.sha256 !== crypto.createHash("sha256").update(archiveBytes).digest("hex")) {
+            throw new Error("catalog does not exactly bind the versioned archive and requested metadata");
+          }
+          const envelope = JSON.parse(fs.readFileSync(process.env.ENVELOPE, "utf8"));
+          if (Buffer.from(envelope.bytes, "base64").compare(catalogBytes) !== 0 ||
+              !envelope.signatures || envelope.signatures.signatures?.length < 1) {
+            throw new Error("catalog envelope does not reproduce signed catalog bytes");
+          }
+          const signatures = JSON.parse(fs.readFileSync(process.env.SIGNATURES, "utf8"));
+          if (signatures.signatures?.length < 1) throw new Error("catalog signature set is empty");
+          NODE
+
+          SHELL_TAG="v$PACKAGE_VERSION"
+          CATALOG_TAG="catalog-$CATALOG_SEQUENCE"
+          if gh api "repos/makekosmos/shell/git/ref/tags/$SHELL_TAG" >/dev/null 2>&1 ||
+             gh release view "$SHELL_TAG" --repo makekosmos/shell >/dev/null 2>&1; then
+            echo "Shell tag/release already exists: $SHELL_TAG" >&2
+            exit 1
+          fi
+          if gh api "repos/makekosmos/package-index/git/ref/tags/$CATALOG_TAG" >/dev/null 2>&1 ||
+             gh release view "$CATALOG_TAG" --repo makekosmos/package-index >/dev/null 2>&1; then
+            echo "Catalog tag/release already exists: $CATALOG_TAG" >&2
+            exit 1
+          fi
+          gh release create "$SHELL_TAG" "$VERSIONED_ARCHIVE#${PACKAGE_ID}-${PACKAGE_VERSION}.kspkg" \
+            --repo makekosmos/shell \
+            --title "Shell $PACKAGE_VERSION" \
+            --notes "Immutable Package v1 artifact from Kosmos $SOURCE_REF"
+
+          gh release create "$CATALOG_TAG" "$CATALOG" "$ENVELOPE" "$SIGNATURES" \
+            --repo makekosmos/package-index \
+            --title "Package catalog $CATALOG_SEQUENCE" \
+            --notes "Immutable catalog from Kosmos $SOURCE_REF"
