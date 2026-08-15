@@ -22,6 +22,7 @@ on:
 
 jobs:
   build-web:
+    environment: production
     runs-on: ubuntu-latest
     permissions: { contents: read }
     steps:
@@ -54,6 +55,7 @@ jobs:
         with: { name: web-packages, path: kosmos-source/.tmp/package/*.kspkg, if-no-files-found: error }
 
   build-bridge:
+    environment: production
     runs-on: windows-latest
     permissions: { contents: read }
     steps:
