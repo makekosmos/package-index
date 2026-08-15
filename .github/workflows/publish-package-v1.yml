@@ -21,24 +21,71 @@ on:
         type: string
 
 jobs:
-  publish:
-    environment: production
+  build-web:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    permissions: { contents: read }
     steps:
-      - name: Checkout immutable Kosmos source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: ksanrse/kosmos
           ref: ${{ inputs.source_ref }}
           token: ${{ secrets.KOSMOS_SOURCE_REPO_TOKEN }}
           path: kosmos-source
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - name: Build and package web apps
+        working-directory: kosmos-source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${{ inputs.source_ref }}" =~ ^[0-9a-fA-F]{40}$ ]]
+          bun install --frozen-lockfile
+          for app in shell eden delphi; do
+            bun run --cwd "products/$app" build
+            node --input-type=module - "$app" <<'NODE'
+          import fs from "node:fs"; import path from "node:path"; import { entriesFromDir, writeZip } from "./platform/desktop/scripts/zip-utils.mjs";
+          const app=process.argv[2],root=path.resolve(`products/${app}`),m=JSON.parse(fs.readFileSync(path.join(root,"manifest.json"))),a=path.resolve(`.tmp/package/${m.id}-${m.version}.kspkg`);fs.mkdirSync(path.dirname(a),{recursive:true});writeZip(a,[{name:"manifest.json",data:Buffer.from(JSON.stringify(m))},...entriesFromDir(path.join(root,"dist")).map(e=>({name:`dist/${e.name}`,data:e.data}))].sort((x,y)=>x.name.localeCompare(y.name)));
+          NODE
+          done
+      - uses: actions/upload-artifact@v4
+        with: { name: web-packages, path: kosmos-source/.tmp/package/*.kspkg, if-no-files-found: error }
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+  build-bridge:
+    runs-on: windows-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ksanrse/kosmos
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.KOSMOS_SOURCE_REPO_TOKEN }}
+          path: kosmos-source
+      - name: Build and package Windows bridge
+        working-directory: kosmos-source
+        shell: pwsh
+        run: |
+          if ('${{ inputs.source_ref }}' -notmatch '^[0-9a-fA-F]{40}$') { throw 'source_ref must be a full immutable commit SHA' }
+          cargo build --release -p kepler-backend --bin ark-markdown-bridge
+          $stage=Join-Path $PWD '.tmp\bridge-stage';$archive=Join-Path $PWD '.tmp\package\ark-markdown-bridge-1.0.0.kspkg';New-Item -ItemType Directory -Force -Path $stage,(Split-Path $archive)|Out-Null
+          Set-Content -NoNewline -Path (Join-Path $stage 'manifest.json') -Value '{"schema_version":1,"id":"ark-markdown-bridge","name":"ARK Markdown Bridge","version":"1.0.0","kind":"bridge","engine_api":">=1.0.0","entrypoint":"ark-markdown-bridge.exe","publisher":"kosmos","permissions":[{"capability":"ark.read","scopes":["list_objects","get_object"]},{"capability":"ark.write","scopes":["upsert_object"]},{"capability":"filesystem.read","scopes":[]},{"capability":"filesystem.write","scopes":[]}]}'
+          Copy-Item target\release\ark-markdown-bridge.exe (Join-Path $stage 'ark-markdown-bridge.exe');Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $archive -Force
+      - uses: actions/upload-artifact@v4
+        with: { name: bridge-package, path: kosmos-source/.tmp/package/ark-markdown-bridge-1.0.0.kspkg, if-no-files-found: error }
 
-      - name: Build, sign, validate, and publish immutable artifacts
+  publish:
+    needs: [build-web, build-bridge]
+    environment: production
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: packages }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ksanrse/kosmos
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.KOSMOS_SOURCE_REPO_TOKEN }}
+          path: kosmos-source
+      - name: Validate and publish one combined catalog
         env:
           GH_TOKEN: ${{ secrets.KOSMOS_RELEASE_REPO_TOKEN }}
           KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY: ${{ secrets.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY }}
@@ -49,93 +96,28 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          if [[ ! "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "source_ref must be a full immutable commit SHA" >&2
-            exit 1
-          fi
-          SOURCE_ROOT="$GITHUB_WORKSPACE/kosmos-source"
-          KEY_PATH="$RUNNER_TEMP/kosmos-release-private.pem"
-          trap 'rm -f -- "$KEY_PATH"' EXIT
-          if [[ -z "${KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY:-}" ]]; then
-            echo "KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY is required" >&2
-            exit 1
-          fi
-          KEY_PATH="$KEY_PATH" node <<'NODE'
-          const fs = require("node:fs");
-          fs.writeFileSync(process.env.KEY_PATH, process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY, {
-            mode: 0o600,
-          });
-          delete process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY;
-          NODE
+          [[ "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'source_ref must be a full immutable commit SHA' >&2; exit 1; }
+          [[ -n "${KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY:-}" ]] || { echo 'KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY is required' >&2; exit 1; }
+          mkdir -p out; cp packages/web-packages/*.kspkg packages/bridge-package/*.kspkg out/
+          export SOURCE_ROOT="$GITHUB_WORKSPACE/kosmos-source" CATALOG="$GITHUB_WORKSPACE/out/catalog.json" SIGNATURES="$GITHUB_WORKSPACE/out/catalog.signatures.json" ENVELOPE="$GITHUB_WORKSPACE/out/catalog.envelope.json"
+          KEY_PATH="$RUNNER_TEMP/kosmos-release-private.pem"; trap 'rm -f -- "$KEY_PATH"' EXIT
+          KEY_PATH="$KEY_PATH" node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.KEY_PATH,process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY,{mode:0o600});delete process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY'
           unset KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY
-          chmod 600 "$KEY_PATH"
-
-          cd "$SOURCE_ROOT"
-          bun install --frozen-lockfile
-          bun run --cwd products/shell build
-          bun run --cwd products/shell test
-          export KOSMOS_PACKAGE_SIGNER="kosmos-release-2026=$KEY_PATH"
-          export KOSMOS_PACKAGE_SEQUENCE="$CATALOG_SEQUENCE"
-          export KOSMOS_PACKAGE_ISSUED_AT="$CATALOG_ISSUED_AT"
-          export KOSMOS_PACKAGE_EXPIRES_AT="$CATALOG_EXPIRES_AT"
-          bun run --cwd products/shell package:v1
-
-          PACKAGE_ID="$(node -p 'JSON.parse(require("fs").readFileSync("products/shell/manifest.json", "utf8")).id')"
-          PACKAGE_VERSION="$(node -p 'JSON.parse(require("fs").readFileSync("products/shell/manifest.json", "utf8")).version')"
-          PACKAGE_DIR="$SOURCE_ROOT/products/shell/.tmp/package"
-          ARCHIVE="$PACKAGE_DIR/package.kspkg"
-          VERSIONED_ARCHIVE="$PACKAGE_DIR/${PACKAGE_ID}-${PACKAGE_VERSION}.kspkg"
-          CATALOG="$PACKAGE_DIR/catalog.json"
-          ENVELOPE="$PACKAGE_DIR/catalog.envelope.json"
-          SIGNATURES="$PACKAGE_DIR/catalog.signatures.json"
-          test -f "$ARCHIVE"
-          mv -- "$ARCHIVE" "$VERSIONED_ARCHIVE"
-          export PACKAGE_ID PACKAGE_VERSION VERSIONED_ARCHIVE CATALOG ENVELOPE SIGNATURES
-          node <<'NODE'
-          const fs = require("node:fs");
-          const crypto = require("node:crypto");
-          const catalogBytes = fs.readFileSync(process.env.CATALOG);
-          const catalog = JSON.parse(catalogBytes);
-          const entry = catalog.packages?.[0];
-          const archiveBytes = fs.readFileSync(process.env.VERSIONED_ARCHIVE);
-          const expectedUrl = `https://github.com/makekosmos/shell/releases/download/v${process.env.PACKAGE_VERSION}/${process.env.PACKAGE_ID}-${process.env.PACKAGE_VERSION}.kspkg`;
-          if (catalog.sequence !== Number(process.env.CATALOG_SEQUENCE) ||
-              catalog.issued_at !== process.env.CATALOG_ISSUED_AT ||
-              catalog.expires_at !== process.env.CATALOG_EXPIRES_AT ||
-              !entry || entry.manifest.id !== process.env.PACKAGE_ID ||
-              entry.manifest.version !== process.env.PACKAGE_VERSION ||
-              entry.archive_url !== expectedUrl ||
-              entry.size !== archiveBytes.length ||
-              entry.sha256 !== crypto.createHash("sha256").update(archiveBytes).digest("hex")) {
-            throw new Error("catalog does not exactly bind the versioned archive and requested metadata");
-          }
-          const envelope = JSON.parse(fs.readFileSync(process.env.ENVELOPE, "utf8"));
-          if (Buffer.from(envelope.bytes, "base64").compare(catalogBytes) !== 0 ||
-              !envelope.signatures || envelope.signatures.signatures?.length < 1) {
-            throw new Error("catalog envelope does not reproduce signed catalog bytes");
-          }
-          const signatures = JSON.parse(fs.readFileSync(process.env.SIGNATURES, "utf8"));
-          if (signatures.signatures?.length < 1) throw new Error("catalog signature set is empty");
+          node - <<'NODE'
+          const fs=require("node:fs"),crypto=require("node:crypto"),path=require("node:path"),root=process.env.SOURCE_ROOT,out=path.join(process.env.GITHUB_WORKSPACE,"out");
+          const specs=[["shell","makekosmos/shell"],["eden","makekosmos/eden"],["delphi","makekosmos/delphi"],["ark-markdown-bridge","makekosmos/markdown-bridge"]];
+          const packages=specs.map(([id,repo])=>{const m=id==="ark-markdown-bridge"?{schema_version:1,id,name:"ARK Markdown Bridge",version:"1.0.0",kind:"bridge",engine_api:">=1.0.0",entrypoint:"ark-markdown-bridge.exe",publisher:"kosmos"}:JSON.parse(fs.readFileSync(path.join(root,`products/${id}/manifest.json`)));const a=path.join(out,`${m.id}-${m.version}.kspkg`),b=fs.readFileSync(a);return {manifest:m,archive_url:`https://github.com/${repo}/releases/download/v${m.version}/${m.id}-${m.version}.kspkg`,sha256:crypto.createHash("sha256").update(b).digest("hex"),size:b.length}});
+          fs.writeFileSync(process.env.CATALOG,JSON.stringify({schema_version:1,sequence:Number(process.env.CATALOG_SEQUENCE),issued_at:process.env.CATALOG_ISSUED_AT,expires_at:process.env.CATALOG_EXPIRES_AT,packages},null,2));
           NODE
-
-          SHELL_TAG="v$PACKAGE_VERSION"
-          CATALOG_TAG="catalog-$CATALOG_SEQUENCE"
-          if gh api "repos/makekosmos/shell/git/ref/tags/$SHELL_TAG" >/dev/null 2>&1 ||
-             gh release view "$SHELL_TAG" --repo makekosmos/shell >/dev/null 2>&1; then
-            echo "Shell tag/release already exists: $SHELL_TAG" >&2
-            exit 1
-          fi
-          if gh api "repos/makekosmos/package-index/git/ref/tags/$CATALOG_TAG" >/dev/null 2>&1 ||
-             gh release view "$CATALOG_TAG" --repo makekosmos/package-index >/dev/null 2>&1; then
-            echo "Catalog tag/release already exists: $CATALOG_TAG" >&2
-            exit 1
-          fi
-          gh release create "$SHELL_TAG" "$VERSIONED_ARCHIVE#${PACKAGE_ID}-${PACKAGE_VERSION}.kspkg" \
-            --repo makekosmos/shell \
-            --title "Shell $PACKAGE_VERSION" \
-            --notes "Immutable Package v1 artifact from Kosmos $SOURCE_REF"
-
-          gh release create "$CATALOG_TAG" "$CATALOG" "$ENVELOPE" "$SIGNATURES" \
-            --repo makekosmos/package-index \
-            --title "Package catalog $CATALOG_SEQUENCE" \
-            --notes "Immutable catalog from Kosmos $SOURCE_REF"
+          node - <<'NODE'
+          const fs=require("node:fs"),crypto=require("node:crypto"),c=JSON.parse(fs.readFileSync(process.env.CATALOG)); for(const p of c.packages){const b=fs.readFileSync(`out/${p.manifest.id}-${p.manifest.version}.kspkg`);if(!p.archive_url.startsWith("https://github.com/makekosmos/")||p.size!==b.length||p.sha256!==crypto.createHash("sha256").update(b).digest("hex"))throw new Error(`catalog integrity mismatch for ${p.manifest.id}`)}
+          NODE
+          node kosmos-source/platform/desktop/scripts/package-sign.mjs --input "$CATALOG" --output "$SIGNATURES" --signer "kosmos-release-2026=$KEY_PATH"
+          node kosmos-source/platform/desktop/scripts/package-envelope.mjs --catalog "$CATALOG" --signatures "$SIGNATURES" --output "$ENVELOPE"
+          while read -r id repo; do version=$(node -p "JSON.parse(require('fs').readFileSync('$CATALOG')).packages.find(p=>p.manifest.id==='$id').manifest.version"); if gh release view "v$version" --repo "$repo" >/dev/null 2>&1; then echo "release already exists: $repo v$version" >&2; exit 1; fi; gh release create "v$version" "out/$id-$version.kspkg#$id-$version.kspkg" --repo "$repo" --title "$id $version" --notes "Immutable artifact from Kosmos $SOURCE_REF";done <<'REPOS'
+          shell makekosmos/shell
+          eden makekosmos/eden
+          delphi makekosmos/delphi
+          ark-markdown-bridge makekosmos/markdown-bridge
+          REPOS
+          gh release create "catalog-$CATALOG_SEQUENCE" "$CATALOG" "$ENVELOPE" "$SIGNATURES" --repo makekosmos/package-index --title "Package catalog $CATALOG_SEQUENCE" --notes "One combined catalog from Kosmos $SOURCE_REF"
