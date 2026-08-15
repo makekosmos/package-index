@@ -36,9 +36,11 @@ jobs:
       - name: Build and package web apps
         working-directory: kosmos-source
         shell: bash
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
         run: |
           set -Eeuo pipefail
-          [[ "${{ inputs.source_ref }}" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]]
           bun install --frozen-lockfile
           for app in eden delphi; do
             bun run --cwd "products/$app" build
@@ -65,8 +67,10 @@ jobs:
       - name: Build and package Windows bridge
         working-directory: kosmos-source
         shell: pwsh
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
         run: |
-          if ('${{ inputs.source_ref }}' -notmatch '^[0-9a-fA-F]{40}$') { throw 'source_ref must be a full immutable commit SHA' }
+          if ($env:SOURCE_REF -notmatch '^[0-9a-fA-F]{40}$') { throw 'source_ref must be a full immutable commit SHA' }
           cargo build --release -p kepler-backend --bin ark-markdown-bridge
           $manifest=Get-Content packages\ark-markdown-bridge\manifest.json | ConvertFrom-Json
           $stage=Join-Path $PWD '.tmp\bridge-stage';$archive=Join-Path $PWD ".tmp\package\$($manifest.id)-$($manifest.version).kspkg";$zip="$archive.zip";New-Item -ItemType Directory -Force -Path $stage,(Split-Path $archive)|Out-Null
