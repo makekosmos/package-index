@@ -38,7 +38,7 @@ jobs:
           set -Eeuo pipefail
           [[ "${{ inputs.source_ref }}" =~ ^[0-9a-fA-F]{40}$ ]]
           bun install --frozen-lockfile
-          for app in shell eden delphi; do
+          for app in eden delphi; do
             bun run --cwd "products/$app" build
             bun run --cwd "products/$app" typecheck
             node --input-type=module - "$app" <<'NODE'
@@ -57,7 +57,6 @@ jobs:
         with:
           repository: ksanrse/kosmos
           ref: ${{ inputs.source_ref }}
-          token: ${{ secrets.KOSMOS_SOURCE_REPO_TOKEN }}
           path: kosmos-source
       - name: Build and package Windows bridge
         working-directory: kosmos-source
@@ -65,13 +64,15 @@ jobs:
         run: |
           if ('${{ inputs.source_ref }}' -notmatch '^[0-9a-fA-F]{40}$') { throw 'source_ref must be a full immutable commit SHA' }
           cargo build --release -p kepler-backend --bin ark-markdown-bridge
-          $stage=Join-Path $PWD '.tmp\bridge-stage';$archive=Join-Path $PWD '.tmp\package\ark-markdown-bridge-1.0.0.kspkg';New-Item -ItemType Directory -Force -Path $stage,(Split-Path $archive)|Out-Null
+          $manifest=Get-Content packages\ark-markdown-bridge\manifest.json | ConvertFrom-Json
+          $stage=Join-Path $PWD '.tmp\bridge-stage';$archive=Join-Path $PWD ".tmp\package\$($manifest.id)-$($manifest.version).kspkg";$zip="$archive.zip";New-Item -ItemType Directory -Force -Path $stage,(Split-Path $archive)|Out-Null
           Copy-Item packages\ark-markdown-bridge\manifest.json (Join-Path $stage 'manifest.json')
           New-Item -ItemType Directory -Force -Path (Join-Path $stage 'dist') | Out-Null
           Copy-Item target\release\ark-markdown-bridge.exe (Join-Path $stage 'dist\ark-markdown-bridge.exe')
-          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $archive -Force
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -Force
+          Move-Item $zip $archive
       - uses: actions/upload-artifact@v4
-        with: { name: bridge-package, path: kosmos-source/.tmp/package/ark-markdown-bridge-1.0.0.kspkg, if-no-files-found: error }
+        with: { name: bridge-package, path: kosmos-source/.tmp/package/*.kspkg, if-no-files-found: error }
 
   publish:
     needs: [build-web, build-bridge]
@@ -101,6 +102,7 @@ jobs:
           [[ -n "${KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY:-}" ]] || { echo 'KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY is required' >&2; exit 1; }
           mkdir -p out; cp packages/web-packages/*.kspkg packages/bridge-package/*.kspkg out/
           mkdir -p out/previous; gh release download catalog-1 --repo makekosmos/package-index --pattern catalog.json --dir out/previous
+          mkdir -p out/existing-shell; gh release download v0.1.0 --repo makekosmos/shell --pattern 'com.kosmos.shell-0.1.0.kspkg' --dir out/existing-shell
           export SOURCE_ROOT="$GITHUB_WORKSPACE/kosmos-source" CATALOG="$GITHUB_WORKSPACE/out/catalog.json" SIGNATURES="$GITHUB_WORKSPACE/out/catalog.signatures.json" ENVELOPE="$GITHUB_WORKSPACE/out/catalog.envelope.json"
           KEY_PATH="$RUNNER_TEMP/kosmos-release-private.pem"; trap 'rm -f -- "$KEY_PATH"' EXIT
           KEY_PATH="$KEY_PATH" node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.KEY_PATH,process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY,{mode:0o600});delete process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY'
@@ -114,7 +116,7 @@ jobs:
           fs.writeFileSync(process.env.CATALOG,JSON.stringify({schema_version:1,sequence:Number(process.env.CATALOG_SEQUENCE),issued_at:process.env.CATALOG_ISSUED_AT,expires_at:process.env.CATALOG_EXPIRES_AT,packages},null,2));
           NODE
           node - <<'NODE'
-          const fs=require("node:fs"),crypto=require("node:crypto"),c=JSON.parse(fs.readFileSync(process.env.CATALOG)); for(const p of c.packages){if(p.manifest.id==="com.kosmos.shell")continue;const b=fs.readFileSync(`out/${p.manifest.id}-${p.manifest.version}.kspkg`);if(!p.archive_url.startsWith("https://github.com/makekosmos/")||p.size!==b.length||p.sha256!==crypto.createHash("sha256").update(b).digest("hex"))throw new Error(`catalog integrity mismatch for ${p.manifest.id}`);if(p.manifest.entrypoint!=="dist/index.html"&&p.manifest.id!=="ark-markdown-bridge")throw new Error(`bad app entrypoint for ${p.manifest.id}`);if(p.manifest.id==="ark-markdown-bridge"&&p.manifest.entrypoint!=="dist/ark-markdown-bridge.exe")throw new Error("bad bridge entrypoint")}
+          const fs=require("node:fs"),crypto=require("node:crypto"),c=JSON.parse(fs.readFileSync(process.env.CATALOG)); for(const p of c.packages){const b=fs.readFileSync(p.manifest.id==="com.kosmos.shell"?`out/existing-shell/${p.manifest.id}-${p.manifest.version}.kspkg`:`out/${p.manifest.id}-${p.manifest.version}.kspkg`);if(!p.archive_url.startsWith("https://github.com/makekosmos/")||p.size!==b.length||p.sha256!==crypto.createHash("sha256").update(b).digest("hex"))throw new Error(`catalog integrity mismatch for ${p.manifest.id}`);if(p.manifest.id!=="com.kosmos.shell"&&p.manifest.entrypoint!=="dist/index.html"&&p.manifest.id!=="ark-markdown-bridge")throw new Error(`bad app entrypoint for ${p.manifest.id}`);if(p.manifest.id==="ark-markdown-bridge"&&p.manifest.entrypoint!=="dist/ark-markdown-bridge.exe")throw new Error("bad bridge entrypoint")}
           NODE
           for spec in 'eden makekosmos/eden' 'delphi makekosmos/delphi' 'ark-markdown-bridge makekosmos/markdown-bridge'; do set -- $spec; id=$1; repo=$2; version=$(node -p "JSON.parse(require('fs').readFileSync('$CATALOG')).packages.find(p=>p.manifest.id==='$id').manifest.version"); gh repo view "$repo" >/dev/null; gh release view "v$version" --repo "$repo" >/dev/null 2>&1 && { echo "release already exists: $repo v$version" >&2; exit 1; }; done
           gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1 && { echo "catalog release already exists" >&2; exit 1; }
