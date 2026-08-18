@@ -1,0 +1,127 @@
+name: Publish Shell package
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Immutable 40-character Kosmos commit SHA
+        required: true
+        type: string
+      sequence:
+        description: Next package-index catalog sequence
+        required: true
+        type: string
+      issued_at:
+        description: Catalog issued-at ISO UTC timestamp
+        required: true
+        type: string
+      expires_at:
+        description: Catalog expiry ISO UTC timestamp (at most 366 days later)
+        required: true
+        type: string
+
+jobs:
+  publish:
+    environment: production
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ksanrse/kosmos
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.KOSMOS_SOURCE_REPO_TOKEN }}
+          persist-credentials: false
+          path: kosmos-source
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+
+      - name: Test, build, and package Shell
+        working-directory: kosmos-source
+        shell: bash
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          OUT_ROOT: ${{ github.workspace }}/out
+        run: |
+          set -Eeuo pipefail
+          [[ "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'source_ref must be a full immutable commit SHA' >&2; exit 1; }
+          bun install --frozen-lockfile
+          bun run --cwd products/shell test
+          bun run --cwd products/shell typecheck
+          bun run --cwd products/shell build
+          node --input-type=module - <<'NODE'
+          import fs from "node:fs";
+          import path from "node:path";
+          import { entriesFromDir, writeZip } from "./platform/desktop/scripts/zip-utils.mjs";
+          const root = path.resolve("products/shell");
+          const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
+          if (manifest.schema_version !== 2 || manifest.id !== "com.kosmos.shell" || manifest.kind !== "app") throw new Error("Shell manifest must be Manifest v2");
+          if (typeof manifest.version !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(manifest.version)) throw new Error("Shell manifest version must be semver");
+          const dist = path.join(root, "dist");
+          const entrypoint = path.join(dist, manifest.entrypoint.slice("dist/".length));
+          if (!manifest.entrypoint.startsWith("dist/") || !fs.existsSync(entrypoint)) throw new Error("Shell entrypoint is missing");
+          const archive = path.resolve(process.env.OUT_ROOT, `${manifest.id}-${manifest.version}.kspkg`);
+          fs.mkdirSync(path.dirname(archive), { recursive: true });
+          writeZip(archive, [{ name: "manifest.json", data: Buffer.from(`${JSON.stringify(manifest)}\\n`) }, ...entriesFromDir(dist).map((entry) => ({ name: `dist/${entry.name}`, data: entry.data }))].sort((a, b) => a.name.localeCompare(b.name)));
+          NODE
+
+      - name: Validate catalog, sign, and publish immutable releases
+        working-directory: kosmos-source
+        env:
+          GH_TOKEN: ${{ secrets.KOSMOS_RELEASE_REPO_TOKEN }}
+          KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY: ${{ secrets.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          CATALOG_SEQUENCE: ${{ inputs.sequence }}
+          CATALOG_ISSUED_AT: ${{ inputs.issued_at }}
+          CATALOG_EXPIRES_AT: ${{ inputs.expires_at }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'source_ref must be a full immutable commit SHA' >&2; exit 1; }
+          [[ -n "${KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY:-}" ]] || { echo 'KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY is required' >&2; exit 1; }
+          mkdir -p "$GITHUB_WORKSPACE/out/previous" "$GITHUB_WORKSPACE/out"
+          prior_tag=$(gh release view --repo makekosmos/package-index --json tagName --jq .tagName)
+          gh release download "$prior_tag" --repo makekosmos/package-index --pattern catalog.json --dir "$GITHUB_WORKSPACE/out/previous"
+          export SOURCE_ROOT="$GITHUB_WORKSPACE/kosmos-source" OUT_ROOT="$GITHUB_WORKSPACE/out"
+          key_path="$RUNNER_TEMP/kosmos-release-private.pem"
+          trap 'rm -f -- "$key_path"' EXIT
+          KEY_PATH="$key_path" node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.KEY_PATH,process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY,{mode:0o600});delete process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY'
+          unset KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY
+          node --input-type=module - <<'NODE'
+          import fs from "node:fs";
+          import crypto from "node:crypto";
+          import path from "node:path";
+          const out = process.env.OUT_ROOT;
+          const prior = JSON.parse(fs.readFileSync(path.join(out, "previous", "catalog.json"), "utf8"));
+          const sequence = Number(process.env.CATALOG_SEQUENCE);
+          if (!Number.isSafeInteger(sequence) || sequence !== Number(prior.sequence) + 1) throw new Error("catalog sequence must be prior sequence + 1");
+          const issued = Date.parse(process.env.CATALOG_ISSUED_AT), expires = Date.parse(process.env.CATALOG_EXPIRES_AT);
+          if (!/^\d{4}-\d\d-\d\dT.*Z$/.test(process.env.CATALOG_ISSUED_AT) || !/^\d{4}-\d\d-\d\dT.*Z$/.test(process.env.CATALOG_EXPIRES_AT) || !Number.isFinite(issued) || !Number.isFinite(expires) || expires <= issued || expires - issued > 366 * 86400000) throw new Error("invalid catalog UTC window");
+          const manifest = JSON.parse(fs.readFileSync(path.join(process.env.SOURCE_ROOT, "products/shell/manifest.json"), "utf8"));
+          if (manifest.schema_version !== 2 || manifest.id !== "com.kosmos.shell" || manifest.kind !== "app" || manifest.publisher !== "kosmos") throw new Error("Shell manifest must be Manifest v2");
+          const archiveName = `${manifest.id}-${manifest.version}.kspkg`, archivePath = path.join(out, archiveName), archive = fs.readFileSync(archivePath);
+          const shell = { manifest, archive_url: `https://github.com/makekosmos/shell/releases/download/v${manifest.version}/${archiveName}`, sha256: crypto.createHash("sha256").update(archive).digest("hex"), size: archive.length };
+          if (!Array.isArray(prior.packages) || !prior.packages.some((p) => p.manifest?.id === manifest.id)) throw new Error("prior catalog has no Shell entry");
+          const packages = prior.packages.map((p) => p.manifest?.id === manifest.id ? shell : p);
+          if (packages.filter((p) => p.manifest?.id === manifest.id).length !== 1) throw new Error("catalog must contain exactly one Shell entry");
+          fs.writeFileSync(path.join(out, "catalog.json"), JSON.stringify({ schema_version: prior.schema_version, sequence, issued_at: process.env.CATALOG_ISSUED_AT, expires_at: process.env.CATALOG_EXPIRES_AT, packages }, null, 2) + "\n");
+          NODE
+          archive="$GITHUB_WORKSPACE/out/com.kosmos.shell-$(node -p "JSON.parse(require('fs').readFileSync('$GITHUB_WORKSPACE/kosmos-source/products/shell/manifest.json')).version").kspkg"
+          entrypoint=$(node -p "JSON.parse(require('fs').readFileSync('$GITHUB_WORKSPACE/kosmos-source/products/shell/manifest.json')).entrypoint")
+          unzip -Z1 "$archive" | grep -Fx manifest.json >/dev/null
+          unzip -Z1 "$archive" | grep -Fx "$entrypoint" >/dev/null
+          unzip -p "$archive" manifest.json > "$GITHUB_WORKSPACE/out/archive-manifest.json"
+          node --input-type=module - <<'NODE'
+          import fs from "node:fs";
+          const c = JSON.parse(fs.readFileSync(process.env.GITHUB_WORKSPACE + "/out/catalog.json"));
+          const a = JSON.parse(fs.readFileSync(process.env.GITHUB_WORKSPACE + "/out/archive-manifest.json"));
+          const p = c.packages.find((x) => x.manifest.id === "com.kosmos.shell");
+          if (a.schema_version !== 2 || a.id !== "com.kosmos.shell" || JSON.stringify(a) !== JSON.stringify(p.manifest)) throw new Error("archive manifest mismatch");
+          NODE
+          version=$(node -p "JSON.parse(require('fs').readFileSync('$GITHUB_WORKSPACE/kosmos-source/products/shell/manifest.json')).version")
+          gh release view "v$version" --repo makekosmos/shell >/dev/null 2>&1 && { echo "Shell release already exists: v$version" >&2; exit 1; }
+          gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1 && { echo "catalog release already exists: catalog-$CATALOG_SEQUENCE" >&2; exit 1; }
+          node "$GITHUB_WORKSPACE/kosmos-source/platform/desktop/scripts/package-sign.mjs" --input "$GITHUB_WORKSPACE/out/catalog.json" --output "$GITHUB_WORKSPACE/out/catalog.signatures.json" --signer "kosmos-release-2026=$key_path"
+          node "$GITHUB_WORKSPACE/kosmos-source/platform/desktop/scripts/package-envelope.mjs" --catalog "$GITHUB_WORKSPACE/out/catalog.json" --signatures "$GITHUB_WORKSPACE/out/catalog.signatures.json" --output "$GITHUB_WORKSPACE/out/catalog.envelope.json"
+          gh release create "v$version" "$archive#com.kosmos.shell-$version.kspkg" --repo makekosmos/shell --title "Kosmos Shell $version" --notes "Immutable artifact from Kosmos $SOURCE_REF"
+          gh release create "catalog-$CATALOG_SEQUENCE" "$GITHUB_WORKSPACE/out/catalog.json" "$GITHUB_WORKSPACE/out/catalog.envelope.json" "$GITHUB_WORKSPACE/out/catalog.signatures.json" --repo makekosmos/package-index --title "Package catalog $CATALOG_SEQUENCE" --notes "Shell-only catalog update from Kosmos $SOURCE_REF"
