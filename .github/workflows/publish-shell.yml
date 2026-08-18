@@ -62,7 +62,7 @@ jobs:
           if (!manifest.entrypoint.startsWith("dist/") || !fs.existsSync(entrypoint)) throw new Error("Shell entrypoint is missing");
           const archive = path.resolve(process.env.OUT_ROOT, `${manifest.id}-${manifest.version}.kspkg`);
           fs.mkdirSync(path.dirname(archive), { recursive: true });
-          writeZip(archive, [{ name: "manifest.json", data: Buffer.from(`${JSON.stringify(manifest)}\\n`) }, ...entriesFromDir(dist).map((entry) => ({ name: `dist/${entry.name}`, data: entry.data }))].sort((a, b) => a.name.localeCompare(b.name)));
+          writeZip(archive, [{ name: "manifest.json", data: Buffer.from(JSON.stringify(manifest)) }, ...entriesFromDir(dist).map((entry) => ({ name: `dist/${entry.name}`, data: entry.data }))].sort((a, b) => a.name.localeCompare(b.name)));
           NODE
 
       - name: Validate catalog, sign, and publish immutable releases
