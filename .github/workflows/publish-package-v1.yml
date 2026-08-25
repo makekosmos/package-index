@@ -1,10 +1,10 @@
-name: Publish Package v1
+name: Publish Package catalog
 
 on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: Immutable 40-character Kosmos commit SHA
+        description: Immutable 40-character Cortex commit SHA for catalog tooling
         required: true
         type: string
       sequence:
@@ -21,56 +21,19 @@ on:
         type: string
 
 jobs:
-  build-web:
-    environment: production
-    runs-on: ubuntu-latest
-    permissions: { contents: read }
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: ksanrse/kosmos
-          ref: ${{ inputs.source_ref }}
-          token: ${{ secrets.KOSMOS_SOURCE_REPO_TOKEN }}
-          persist-credentials: false
-          path: kosmos-source
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-      - name: Build and package web apps
-        working-directory: kosmos-source
-        shell: bash
-        env:
-          SOURCE_REF: ${{ inputs.source_ref }}
-        run: |
-          set -Eeuo pipefail
-          [[ "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]]
-          [[ "$(git rev-parse HEAD)" == "$SOURCE_REF" ]]
-          bun install --frozen-lockfile
-          for app in eden delphi; do
-            bun run --cwd "products/$app" build
-            bun run --cwd "products/$app" typecheck
-            node --input-type=module - "$app" <<'NODE'
-          import fs from "node:fs"; import path from "node:path"; import { entriesFromDir, writeZip } from "./platform/desktop/scripts/zip-utils.mjs";
-          const app=process.argv[2],root=path.resolve(`products/${app}`),m=JSON.parse(fs.readFileSync(path.join(root,"manifest.json"))),icon=fs.readFileSync(path.join(root,m.icon)),a=path.resolve(`.tmp/package/${m.id}-${m.version}.kspkg`);if(m.icon!=="icon.ico")throw new Error(`${app} manifest icon must be icon.ico`);fs.mkdirSync(path.dirname(a),{recursive:true});writeZip(a,[{name:"manifest.json",data:Buffer.from(JSON.stringify(m))},{name:m.icon,data:icon},...entriesFromDir(path.join(root,"dist")).map(e=>({name:`dist/${e.name}`,data:e.data}))].sort((x,y)=>x.name.localeCompare(y.name)));
-          NODE
-          done
-      - uses: actions/upload-artifact@v4
-        with: { name: web-packages, path: kosmos-source/.tmp/package/*.kspkg, if-no-files-found: error }
-
   publish:
-    needs: [build-web]
     environment: production
     runs-on: ubuntu-latest
     permissions: { contents: read }
     steps:
-      - uses: actions/download-artifact@v4
-        with: { path: packages }
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          repository: ksanrse/kosmos
+          repository: makekosmos/cortex
           ref: ${{ inputs.source_ref }}
           token: ${{ secrets.KOSMOS_SOURCE_REPO_TOKEN }}
           persist-credentials: false
-          path: kosmos-source
-      - name: Validate and publish one combined catalog
+          path: cortex
+      - name: Build and sign the replacement catalog
         env:
           GH_TOKEN: ${{ secrets.KOSMOS_RELEASE_REPO_TOKEN }}
           KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY: ${{ secrets.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY }}
@@ -81,37 +44,30 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          [[ "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'source_ref must be a full immutable commit SHA' >&2; exit 1; }
-          [[ "$(git -C kosmos-source rev-parse HEAD)" == "$SOURCE_REF" ]] || { echo 'checked out source does not match source_ref' >&2; exit 1; }
-          [[ -n "${KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY:-}" ]] || { echo 'KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY is required' >&2; exit 1; }
-          mkdir -p out; cp packages/web-packages/*.kspkg out/
+          [[ "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$(git -C cortex rev-parse HEAD)" == "$SOURCE_REF" ]]
+          [[ -n "${KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY:-}" ]]
           previous_sequence=$((CATALOG_SEQUENCE - 1))
-          [[ "$previous_sequence" =~ ^[1-9][0-9]*$ ]] || { echo 'catalog sequence must be greater than 1' >&2; exit 1; }
-          mkdir -p out/previous; gh release download "catalog-$previous_sequence" --repo makekosmos/package-index --pattern catalog.json --dir out/previous
-          gh release download v0.2.0 --repo makekosmos/shell --pattern 'com.kosmos.shell-0.2.0.kspkg' --dir out/existing-shell
-          gh release download v0.1.0 --repo makekosmos/markdown-bridge --pattern 'ark-markdown-bridge-0.1.0.kspkg' --dir out
-          export SOURCE_ROOT="$GITHUB_WORKSPACE/kosmos-source" CATALOG="$GITHUB_WORKSPACE/out/catalog.json" SIGNATURES="$GITHUB_WORKSPACE/out/catalog.signatures.json" ENVELOPE="$GITHUB_WORKSPACE/out/catalog.envelope.json"
+          [[ "$previous_sequence" =~ ^[1-9][0-9]*$ ]]
+          mkdir -p out/previous
+          gh release download "catalog-$previous_sequence" --repo makekosmos/package-index --pattern catalog.json --dir out/previous
+          gh release download v0.1.7 --repo makekosmos/arcadia --pattern '*.kspkg' --dir out
+          gh release download v0.2.0 --repo makekosmos/dictation --pattern '*.kspkg' --dir out
           KEY_PATH="$RUNNER_TEMP/kosmos-release-private.pem"; trap 'rm -f -- "$KEY_PATH"' EXIT
-          KEY_PATH="$KEY_PATH" node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.KEY_PATH,process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY,{mode:0o600});delete process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY'
+          KEY_PATH="$KEY_PATH" node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.KEY_PATH,process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY,{mode:0o600})'
           unset KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY
+          export CATALOG="$GITHUB_WORKSPACE/out/catalog.json" SIGNATURES="$GITHUB_WORKSPACE/out/catalog.signatures.json" ENVELOPE="$GITHUB_WORKSPACE/out/catalog.envelope.json"
           node - <<'NODE'
-          const fs=require("node:fs"),crypto=require("node:crypto"),path=require("node:path"),root=process.env.SOURCE_ROOT,out=path.join(process.env.GITHUB_WORKSPACE,"out");
-          const prior=JSON.parse(fs.readFileSync(path.join(out,"previous","catalog.json"))),replaced=new Set(["com.kosmos.eden","com.kosmos.delphi"]),old=prior.packages.filter(p=>replaced.has(p.manifest.id)),existing=prior.packages.filter(p=>!replaced.has(p.manifest.id));
-          if(old.length!==replaced.size||new Set(old.map(p=>p.manifest.id)).size!==replaced.size)throw new Error("prior catalog must have one Eden and one Delphi entry");
-          const apps=["eden","delphi"].map(app=>{const m=JSON.parse(fs.readFileSync(path.join(root,`products/${app}/manifest.json`))),a=path.join(out,`${m.id}-${m.version}.kspkg`),b=fs.readFileSync(a),icon=fs.readFileSync(path.join(root,`products/${app}`,m.icon));if(m.icon!=="icon.ico"||!icon.equals(fs.readFileSync(path.join(root,`products/${app}/icon.ico`))))throw new Error(`${app} manifest/icon mismatch`);return {manifest:m,archive_url:`https://github.com/makekosmos/${app}/releases/download/v${m.version}/${m.id}-${m.version}.kspkg`,sha256:crypto.createHash("sha256").update(b).digest("hex"),size:b.length};});
-          const packages=[...existing,...apps];
-          if(Number(process.env.CATALOG_SEQUENCE)<=1||!/^\d{4}-\d\d-\d\dT.*Z$/.test(process.env.CATALOG_ISSUED_AT)||!/^\d{4}-\d\d-\d\dT.*Z$/.test(process.env.CATALOG_EXPIRES_AT)||Date.parse(process.env.CATALOG_EXPIRES_AT)<=Date.parse(process.env.CATALOG_ISSUED_AT)||Date.parse(process.env.CATALOG_EXPIRES_AT)-Date.parse(process.env.CATALOG_ISSUED_AT)>366*86400000)throw new Error("invalid catalog sequence or times");
-          fs.writeFileSync(process.env.CATALOG,JSON.stringify({schema_version:1,sequence:Number(process.env.CATALOG_SEQUENCE),issued_at:process.env.CATALOG_ISSUED_AT,expires_at:process.env.CATALOG_EXPIRES_AT,packages},null,2));
+          const cp=require("node:child_process"),crypto=require("node:crypto"),fs=require("node:fs"),path=require("node:path"),out=path.join(process.env.GITHUB_WORKSPACE,"out");
+          const prior=JSON.parse(fs.readFileSync(path.join(out,"previous","catalog.json"))),replaced=new Set(["com.kosmos.eden","com.kosmos.delphi","com.kosmos.arcadia","com.kosmos.dictation"]);
+          const read=(file)=>JSON.parse(cp.execFileSync("unzip",["-p",file,"manifest.json"],{encoding:"utf8"}));
+          const packageFrom=(repo,file)=>{const archive=path.join(out,file),manifest=read(archive),bytes=fs.readFileSync(archive);if(manifest.schema_version!==2||manifest.kind!=="app"||manifest.entrypoint!=="dist/index.html"||manifest.icon!=="icon.png")throw new Error(`invalid package ${file}`);return {manifest,archive_url:`https://github.com/makekosmos/${repo}/releases/download/v${manifest.version}/${file}`,sha256:crypto.createHash("sha256").update(bytes).digest("hex"),size:bytes.length};};
+          const apps=[packageFrom("arcadia","com.kosmos.arcadia-0.1.7.kspkg"),packageFrom("dictation","dictation-0.2.0.kspkg")];
+          if(apps[0].manifest.id!=="com.kosmos.arcadia"||apps[1].manifest.id!=="com.kosmos.dictation")throw new Error("unexpected release manifests");
+          const issued=Date.parse(process.env.CATALOG_ISSUED_AT),expires=Date.parse(process.env.CATALOG_EXPIRES_AT),sequence=Number(process.env.CATALOG_SEQUENCE);if(!Number.isInteger(sequence)||sequence<=1||!Number.isFinite(issued)||!Number.isFinite(expires)||expires<=issued||expires-issued>366*86400000)throw new Error("invalid catalog metadata");
+          fs.writeFileSync(process.env.CATALOG,JSON.stringify({schema_version:1,sequence,issued_at:process.env.CATALOG_ISSUED_AT,expires_at:process.env.CATALOG_EXPIRES_AT,packages:[...prior.packages.filter(p=>!replaced.has(p.manifest.id)),...apps]},null,2));
           NODE
-          node - <<'NODE'
-          const fs=require("node:fs"),crypto=require("node:crypto"),c=JSON.parse(fs.readFileSync(process.env.CATALOG)),rebuiltApps=new Set(["com.kosmos.eden","com.kosmos.delphi"]); for(const p of c.packages){const b=fs.readFileSync(p.manifest.id==="com.kosmos.shell"?`out/existing-shell/${p.manifest.id}-${p.manifest.version}.kspkg`:`out/${p.manifest.id}-${p.manifest.version}.kspkg`);if(!p.archive_url.startsWith("https://github.com/makekosmos/")||p.size!==b.length||p.sha256!==crypto.createHash("sha256").update(b).digest("hex"))throw new Error(`catalog integrity mismatch for ${p.manifest.id}`);if(p.manifest.id!=="com.kosmos.shell"&&p.manifest.entrypoint!=="dist/index.html"&&p.manifest.id!=="ark-markdown-bridge")throw new Error(`bad app entrypoint for ${p.manifest.id}`);if(p.manifest.id==="ark-markdown-bridge"&&p.manifest.entrypoint!=="dist/ark-markdown-bridge.exe")throw new Error("bad bridge entrypoint");if(rebuiltApps.has(p.manifest.id)&&p.manifest.icon!=="icon.ico")throw new Error(`bad icon declaration for ${p.manifest.id}`)}
-          NODE
-          for app in eden delphi; do id=com.kosmos.$app; repo=makekosmos/$app; version=$(node -p "JSON.parse(require('fs').readFileSync('$CATALOG')).packages.find(p=>p.manifest.id==='$id').manifest.version"); archive="out/$id-$version.kspkg"; entrypoint=$(node -p "JSON.parse(require('fs').readFileSync('$CATALOG')).packages.find(p=>p.manifest.id==='$id').manifest.entrypoint"); unzip -Z1 "$archive" | grep -Fx 'manifest.json' >/dev/null; unzip -Z1 "$archive" | grep -Fx 'icon.ico' >/dev/null; unzip -Z1 "$archive" | grep -Fx "$entrypoint" >/dev/null; unzip -p "$archive" manifest.json > "out/$app-archive-manifest.json"; unzip -p "$archive" icon.ico > "out/$app-archive-icon.ico"; ID="$id" APP="$app" node -e 'const fs=require("node:fs"),c=JSON.parse(fs.readFileSync(process.env.CATALOG)),a=JSON.parse(fs.readFileSync(`out/${process.env.APP}-archive-manifest.json`)),m=c.packages.find(p=>p.manifest.id===process.env.ID).manifest,i=fs.readFileSync(`out/${process.env.APP}-archive-icon.ico`),s=fs.readFileSync(`${process.env.SOURCE_ROOT}/products/${process.env.APP}/icon.ico`);if(JSON.stringify(a)!==JSON.stringify(m))throw new Error("archive manifest mismatch");if(!i.equals(s)||i.readUInt32LE(0)!==0x00010000)throw new Error("archive icon must match an ICO source")'; gh repo view "$repo" >/dev/null; gh release view "v$version" --repo "$repo" >/dev/null 2>&1 && { echo "release already exists: $repo v$version" >&2; exit 1; }; done
-          gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1 && { echo "catalog release already exists" >&2; exit 1; }
-          node kosmos-source/platform/desktop/scripts/package-sign.mjs --input "$CATALOG" --output "$SIGNATURES" --signer "kosmos-release-2026=$KEY_PATH"
-          node kosmos-source/platform/desktop/scripts/package-envelope.mjs --catalog "$CATALOG" --signatures "$SIGNATURES" --output "$ENVELOPE"
-          node - <<'NODE'
-          const fs=require("node:fs"),c=fs.readFileSync(process.env.CATALOG),e=JSON.parse(fs.readFileSync(process.env.ENVELOPE));if(Buffer.from(e.bytes,"base64").compare(c)!==0||!e.signatures?.signatures?.length)throw new Error("catalog envelope does not reproduce signed bytes");if(!JSON.parse(fs.readFileSync(process.env.SIGNATURES)).signatures?.length)throw new Error("catalog signature set is empty");
-          NODE
-          for app in eden delphi; do id=com.kosmos.$app; version=$(node -p "JSON.parse(require('fs').readFileSync('$CATALOG')).packages.find(p=>p.manifest.id==='$id').manifest.version"); gh release create "v$version" "out/$id-$version.kspkg#$id-$version.kspkg" "kosmos-source/products/$app/icon.png#$id-icon.png" --repo "makekosmos/$app" --title "$id $version" --notes "Immutable artifact from Kosmos $SOURCE_REF"; done
-          gh release create "catalog-$CATALOG_SEQUENCE" "$CATALOG" "$ENVELOPE" "$SIGNATURES" --repo makekosmos/package-index --title "Package catalog $CATALOG_SEQUENCE" --notes "One combined catalog from Kosmos $SOURCE_REF"
+          node cortex/desktop/scripts/package-sign.mjs --input "$CATALOG" --output "$SIGNATURES" --signer "kosmos-release-2026=$KEY_PATH"
+          node cortex/desktop/scripts/package-envelope.mjs --catalog "$CATALOG" --signatures "$SIGNATURES" --output "$ENVELOPE"
+          gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1 && exit 1 || true
+          gh release create "catalog-$CATALOG_SEQUENCE" "$CATALOG" "$ENVELOPE" "$SIGNATURES" --repo makekosmos/package-index --title "Package catalog $CATALOG_SEQUENCE" --notes "Arcadia and Dictation replace retired Eden and Delphi."
