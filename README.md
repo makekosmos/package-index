@@ -10,17 +10,18 @@ Public binary-only distribution channel for **Kosmos Package Index**.
   keys, tokens, source workspaces, build caches, and local artifacts never belong
   in this repository.
 
-Engine API compatibility is versioned separately and remains 1.0.0. Package v1
-schema remains 1.
+Engine API compatibility is versioned separately and remains 1.0.0. Package
+manifest schema remains 2.
 
 ## Operator publication
 
-Run the `Publish Package v1` workflow with an immutable Kosmos commit SHA and
-the next catalog sequence plus bounded ISO UTC timestamps:
+Run the `Publish Package v1` workflow with the immutable Package Index commit
+containing the reviewed BOM, its path, and its catalog sequence:
 
 ```text
-source_ref=<40-character Kosmos commit SHA>
-sequence=<next strictly increasing integer>
+bom_ref=<40-character Package Index commit SHA>
+bom_path=release/bom.v1.json
+sequence=<BOM catalog sequence>
 issued_at=2026-08-02T16:00:00Z
 expires_at=2026-09-01T16:00:00Z
 ```
@@ -63,11 +64,34 @@ the PR contract proves deterministic validation and signing-input handling,
 while the production workflow remains the only path allowed to use release
 credentials.
 
-## Rollback and provenance
+## Release BOM and dry-run
 
-Releases are append-only: never overwrite a `catalog-N` tag or reuse a
-sequence. To roll back, point consumers at the last known-good immutable
-catalog release and investigate the failed release; do not delete or replace
-the tag. Verify provenance by checking the release asset SHA-256, the embedded
-Manifest v2 identity/version, the source commit recorded by the operator, and
-the detached Ed25519 signature against the published key allowlist.
+[`release/bom.v1.json`](release/bom.v1.json) is the reviewed v1 release BOM for
+the Package catalog. It pins the Cortex/Core/Arca SDK/Imago commits, toolchains,
+API compatibility, catalog sequence, signing key ID, and every app/source
+package input. Application release refs are full commit SHAs with checked-in
+archive SHA-256 and sizes. Source package archive hashes are filled after the
+workers are built. The checked-in document has `state: candidate`; publication
+changes only that field and the pending source artifact metadata to produce a
+fully hashed `state: resolved` BOM attached to the immutable catalog release.
+
+Validate the checked-in BOM without signing secrets:
+
+```text
+node scripts/validate-bom.mjs --bom release/bom.v1.json --sequence 12 --allow-pending-builds
+node scripts/build-source-packages.mjs --bom release/bom.v1.json --cortex <cortex-checkout> --out out --sequence 12 --dry-run
+```
+
+Production publication takes only `bom_ref`; the Cortex commit is resolved from
+that immutable BOM. The workflow verifies every release tag resolves to the BOM
+SHA, downloads and hash-checks all external archives, builds and checks all
+source archives, then signs and publishes `release-bom.v1.json` beside the
+catalog artifacts.
+
+## Rollback
+
+Rollback selects an existing immutable `catalog-N` release and its attached
+`release-bom.v1.json`; it never reconstructs versions from `main`, `latest`, or
+manual release tags. Download the catalog and BOM from the same release, verify
+the signed envelope and BOM hashes, and point the updater at that immutable
+catalog. A new publication must use a new sequence and a reviewed BOM.

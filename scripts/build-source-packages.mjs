@@ -4,11 +4,9 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { loadBom } from "./validate-bom.mjs";
 
 let zipUtils;
-
-const providers = ["bigfrontend", "greatfrontend", "leetcode", "codewars", "hevy", "toggl"];
-const target = "x86_64-pc-windows-msvc";
 
 function fail(message) {
   throw new Error(message);
@@ -27,7 +25,7 @@ function parseArgs(argv) {
     }
     args[flag.slice(2)] = argv[++i];
   }
-  for (const name of ["cortex", "out", "sequence"]) {
+  for (const name of ["bom", "cortex", "out", "sequence"]) {
     if (!args[name]) fail(`required argument --${name}`);
   }
   return args;
@@ -37,15 +35,16 @@ function object(value) {
   return value && Object.prototype.toString.call(value) === "[object Object]";
 }
 
-function validateManifest(manifest, provider) {
+function validateManifest(manifest, spec) {
+  const provider = spec.build.provider;
   if (
     manifest.schema_version !== 2 ||
-    manifest.id !== `com.kosmos.${provider}` ||
-    manifest.version !== "0.1.0" ||
-    manifest.kind !== "source" ||
+    manifest.id !== spec.manifest_id ||
+    manifest.version !== spec.version ||
+    manifest.kind !== spec.kind ||
     manifest.publisher !== "kosmos" ||
-    manifest.entrypoint !== `${provider}-worker.exe` ||
-    manifest.icon !== "icon.png"
+    manifest.entrypoint !== spec.entrypoint ||
+    manifest.icon !== spec.icon
   ) {
     fail(`${provider}: invalid source manifest identity`);
   }
@@ -108,7 +107,7 @@ async function requiredFile(file, label) {
   if (!info?.isFile() || info.size === 0) fail(`${label} is missing or empty: ${file}`);
 }
 
-function runCargo(cargoToml, binary, targetDir) {
+function runCargo(cargoToml, binary, targetDir, target) {
   const result = spawnSync(process.env.CARGO ?? "cargo", [
     "build",
     "--manifest-path",
@@ -116,6 +115,7 @@ function runCargo(cargoToml, binary, targetDir) {
     "--bin",
     binary,
     "--release",
+    "--locked",
     "--target",
     target,
     "--target-dir",
@@ -128,12 +128,13 @@ function archiveEntryNames(entries) {
   return entries.filter((entry) => !entry.isDir).map((entry) => entry.name).sort();
 }
 
-async function buildProvider(provider, cortex, out, sequence, dryRun) {
+async function buildProvider(spec, cortex, out, sequence, dryRun) {
+  const provider = spec.build.provider;
   const packageDir = path.join(cortex, "packages", provider);
   const manifestPath = path.join(packageDir, "manifest.json");
   const manifestBytes = await readFile(manifestPath).catch(() => fail(`${provider}: committed manifest is missing`));
   const manifest = JSON.parse(manifestBytes);
-  validateManifest(manifest, provider);
+  validateManifest(manifest, spec);
   await requiredFile(path.join(packageDir, "Cargo.toml"), `${provider} Cargo.toml`);
   await requiredFile(path.join(packageDir, manifest.icon), `${provider} icon`);
   if (dryRun) return { manifest };
@@ -142,8 +143,8 @@ async function buildProvider(provider, cortex, out, sequence, dryRun) {
   const targetDir = path.join(stage, "build");
   await rm(stage, { recursive: true, force: true });
   await mkdir(stage, { recursive: true });
-  runCargo(path.join(packageDir, "Cargo.toml"), manifest.entrypoint.slice(0, -4), targetDir);
-  const executable = path.join(targetDir, target, "release", manifest.entrypoint);
+  runCargo(path.join(packageDir, "Cargo.toml"), manifest.entrypoint.slice(0, -4), targetDir, spec.build.target);
+  const executable = path.join(targetDir, spec.build.target, "release", manifest.entrypoint);
   await requiredFile(executable, `${provider} worker`);
   const iconBytes = await readFile(path.join(packageDir, manifest.icon));
   const archiveBytes = [
@@ -151,7 +152,7 @@ async function buildProvider(provider, cortex, out, sequence, dryRun) {
     { name: manifest.entrypoint, data: await readFile(executable) },
     { name: "icon.png", data: iconBytes },
   ];
-  const archiveName = `${manifest.id}-${manifest.version}.kspkg`;
+  const archiveName = spec.artifact.name;
   const archive = path.join(out, archiveName);
   zipUtils.writeZip(archive, archiveBytes);
   const entries = zipUtils.readZip(archive);
@@ -160,7 +161,7 @@ async function buildProvider(provider, cortex, out, sequence, dryRun) {
   const bytes = await readFile(archive);
   return {
     manifest,
-    archive_url: `https://github.com/makekosmos/package-index/releases/download/catalog-${sequence}/${archiveName}`,
+    archive_url: (spec.artifact.url_template ?? spec.artifact.url).replace("{sequence}", String(sequence)),
     sha256: createHash("sha256").update(bytes).digest("hex"),
     size: bytes.length,
   };
@@ -171,12 +172,14 @@ try {
   const cortex = path.resolve(args.cortex);
   const out = path.resolve(args.out);
   zipUtils = await import(pathToFileURL(path.join(cortex, "desktop", "scripts", "zip-utils.mjs")).href);
+  const bom = await loadBom(args.bom, { expectedSequence: args.sequence, allowPendingBuilds: true });
+  const sourceSpecs = bom.packages.filter((spec) => spec.kind === "source");
   const packages = [];
-  for (const provider of providers) packages.push(await buildProvider(provider, cortex, out, args.sequence, args.dryRun));
+  for (const spec of sourceSpecs) packages.push(await buildProvider(spec, cortex, out, args.sequence, args.dryRun));
   if (!args.dryRun) {
-    await writeFile(path.join(out, "source-packages.json"), `${JSON.stringify({ schema_version: 1, packages }, null, 2)}\n`);
+    await writeFile(path.join(out, "source-packages.json"), `${JSON.stringify({ schema_version: 1, bom_id: bom.id, packages }, null, 2)}\n`);
   }
-  console.log(`${args.dryRun ? "Validated" : "Built"} ${providers.length} source packages: ${providers.join(", ")}`);
+  console.log(`${args.dryRun ? "Validated" : "Built"} ${sourceSpecs.length} source packages: ${sourceSpecs.map((spec) => spec.build.provider).join(", ")}`);
 } catch (error) {
   console.error(`[source-packages] ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;

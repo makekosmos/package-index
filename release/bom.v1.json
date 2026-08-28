@@ -1,0 +1,276 @@
+{
+  "schema_version": 1,
+  "state": "candidate",
+  "id": "kosmos-package-catalog-12",
+  "release": {
+    "version": "0.9.15",
+    "channel": "production",
+    "platform": "win"
+  },
+  "source": {
+    "cortex": {
+      "repository": "makekosmos/cortex",
+      "commit": "fbadb80d231b5aff390fd1ead15f60892d50519c"
+    },
+    "core": {
+      "repository": "makekosmos/core",
+      "commit": "ee474a2709c9871cdef09e67290883fac22e9afd",
+      "ark_artifact": {
+        "name": "ark-core-rpc.exe",
+        "sha256": "f62e214623beab8e0068342a8b564afac4f727e648043c329836eff9ee64ce98",
+        "size": 9454592
+      }
+    },
+    "arca_sdk": {
+      "repository": "makekosmos/arca-sdk",
+      "commit": "e2c60732f21168febbaec4aac4cd85d7cdb540af",
+      "package": {
+        "name": "@makekosmos/ark",
+        "version": "0.1.1",
+        "integrity": "git:e2c60732f21168febbaec4aac4cd85d7cdb540af"
+      }
+    },
+    "imago": {
+      "repository": "makekosmos/imago",
+      "commit": "9d39cdccde235b9367cb677f8107da7afd9e31fd",
+      "package": {
+        "name": "@makekosmos/visuals",
+        "version": "0.1.3",
+        "integrity": "git:9d39cdccde235b9367cb677f8107da7afd9e31fd"
+      }
+    },
+    "store": {
+      "repository": "makekosmos/store",
+      "commit": "0e87ff87480c97b58bb56f9ff5da12d6522e3cbe"
+    },
+    "toolchain": {
+      "node": "24.15.0",
+      "bun": "1.3.14",
+      "rust": "1.95.0",
+      "target": "x86_64-pc-windows-msvc"
+    }
+  },
+  "compatibility": {
+    "shell_api": "1.1.0",
+    "engine_api": "1.0.0",
+    "package_schema": 2
+  },
+  "catalog": {
+    "sequence": 12,
+    "previous_sequence": 11,
+    "store_sequence": 12,
+    "channel": "production",
+    "signing_key_id": "kosmos-release-2026"
+  },
+  "retired_package_ids": [
+    "com.kosmos.eden",
+    "com.kosmos.delphi"
+  ],
+  "packages": [
+    {
+      "id": "com.kosmos.arcadia",
+      "manifest_id": "com.kosmos.arcadia",
+      "kind": "app",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.8",
+      "repository": "makekosmos/arcadia",
+      "ref": "8ad099082106a7e5deb42c0fe3cb64b9b06eaf39",
+      "release_tag": "v0.1.8",
+      "entrypoint": "dist/index.html",
+      "icon": "icon.png",
+      "artifact": {
+        "name": "com.kosmos.arcadia-0.1.8.kspkg",
+        "url": "https://github.com/makekosmos/arcadia/releases/download/v0.1.8/com.kosmos.arcadia-0.1.8.kspkg",
+        "sha256": "9f774db4228ee13cf7ce205f011abc52bcdbdb3b236271ad8dae6eabb4233b64",
+        "size": 692660
+      }
+    },
+    {
+      "id": "com.kosmos.dictation",
+      "manifest_id": "com.kosmos.dictation",
+      "kind": "app",
+      "engine_api": ">=1.0.0",
+      "version": "0.2.2",
+      "repository": "makekosmos/dictation",
+      "ref": "1f103810ffcd0fc0aee36a9784d51d06f26a1989",
+      "release_tag": "v0.2.2",
+      "entrypoint": "dist/index.html",
+      "icon": "icon.png",
+      "artifact": {
+        "name": "dictation-0.2.2.kspkg",
+        "url": "https://github.com/makekosmos/dictation/releases/download/v0.2.2/dictation-0.2.2.kspkg",
+        "sha256": "4ce3d5e438a3598af06e3152e513f7a11a0a1d252ec69a2e22b14b3a9688e0f9",
+        "size": 1302770
+      }
+    },
+    {
+      "id": "com.kosmos.agenda",
+      "manifest_id": "com.kosmos.agenda",
+      "kind": "app",
+      "engine_api": ">=1.0.0",
+      "version": "0.2.4",
+      "repository": "makekosmos/agenda",
+      "ref": "ca65ad05676e998021aaf5ef5b5b6be47e1838fc",
+      "release_tag": "v0.2.4",
+      "entrypoint": "dist/index.html",
+      "icon": "icon.png",
+      "artifact": {
+        "name": "agenda-0.2.4.kspkg",
+        "url": "https://github.com/makekosmos/agenda/releases/download/v0.2.4/agenda-0.2.4.kspkg",
+        "sha256": "2a143cb0f97db3a9326ac91e01e55c09516bf4613bb81d592bd87b13d12867d0",
+        "size": 710654
+      }
+    },
+    {
+      "id": "com.kosmos.memoria",
+      "manifest_id": "com.kosmos.memoria",
+      "kind": "app",
+      "engine_api": ">=1.0.0",
+      "version": "0.6.3",
+      "repository": "makekosmos/memoria",
+      "ref": "496dc0e40cb5dd615cb62a90ffa5388ce33268ac",
+      "release_tag": "v0.6.3",
+      "entrypoint": "dist/index.html",
+      "icon": "icon.png",
+      "artifact": {
+        "name": "memoria-0.6.3.kspkg",
+        "url": "https://github.com/makekosmos/memoria/releases/download/v0.6.3/memoria-0.6.3.kspkg",
+        "sha256": "af03fe9c6987159e83a00938e3b98f605afc3a4cf80d93b5b9ac34d87accb86f",
+        "size": 2888653
+      }
+    },
+    {
+      "id": "com.kosmos.focus",
+      "manifest_id": "com.kosmos.focus",
+      "kind": "app",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.3",
+      "repository": "makekosmos/ordo",
+      "ref": "8b1da291b2b7f22597c6e745c23716cfeb19e674",
+      "release_tag": "v0.1.3",
+      "entrypoint": "dist/index.html",
+      "icon": "icon.png",
+      "artifact": {
+        "name": "ordo-0.1.3.kspkg",
+        "url": "https://github.com/makekosmos/ordo/releases/download/v0.1.3/ordo-0.1.3.kspkg",
+        "sha256": "ac44438d9ae56a9ae4ef542055174d85da3b7639fa990755d0664f39679c3dd8",
+        "size": 2860686
+      }
+    },
+    {
+      "id": "com.kosmos.bigfrontend",
+      "manifest_id": "com.kosmos.bigfrontend",
+      "kind": "source",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.0",
+      "repository": "makekosmos/cortex",
+      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "entrypoint": "bigfrontend-worker.exe",
+      "icon": "icon.png",
+      "build": {
+        "provider": "bigfrontend",
+        "target": "x86_64-pc-windows-msvc"
+      },
+      "artifact": {
+        "name": "com.kosmos.bigfrontend-0.1.0.kspkg",
+        "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.bigfrontend-0.1.0.kspkg"
+      }
+    },
+    {
+      "id": "com.kosmos.greatfrontend",
+      "manifest_id": "com.kosmos.greatfrontend",
+      "kind": "source",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.0",
+      "repository": "makekosmos/cortex",
+      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "entrypoint": "greatfrontend-worker.exe",
+      "icon": "icon.png",
+      "build": {
+        "provider": "greatfrontend",
+        "target": "x86_64-pc-windows-msvc"
+      },
+      "artifact": {
+        "name": "com.kosmos.greatfrontend-0.1.0.kspkg",
+        "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.greatfrontend-0.1.0.kspkg"
+      }
+    },
+    {
+      "id": "com.kosmos.leetcode",
+      "manifest_id": "com.kosmos.leetcode",
+      "kind": "source",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.0",
+      "repository": "makekosmos/cortex",
+      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "entrypoint": "leetcode-worker.exe",
+      "icon": "icon.png",
+      "build": {
+        "provider": "leetcode",
+        "target": "x86_64-pc-windows-msvc"
+      },
+      "artifact": {
+        "name": "com.kosmos.leetcode-0.1.0.kspkg",
+        "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.leetcode-0.1.0.kspkg"
+      }
+    },
+    {
+      "id": "com.kosmos.codewars",
+      "manifest_id": "com.kosmos.codewars",
+      "kind": "source",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.0",
+      "repository": "makekosmos/cortex",
+      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "entrypoint": "codewars-worker.exe",
+      "icon": "icon.png",
+      "build": {
+        "provider": "codewars",
+        "target": "x86_64-pc-windows-msvc"
+      },
+      "artifact": {
+        "name": "com.kosmos.codewars-0.1.0.kspkg",
+        "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.codewars-0.1.0.kspkg"
+      }
+    },
+    {
+      "id": "com.kosmos.hevy",
+      "manifest_id": "com.kosmos.hevy",
+      "kind": "source",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.0",
+      "repository": "makekosmos/cortex",
+      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "entrypoint": "hevy-worker.exe",
+      "icon": "icon.png",
+      "build": {
+        "provider": "hevy",
+        "target": "x86_64-pc-windows-msvc"
+      },
+      "artifact": {
+        "name": "com.kosmos.hevy-0.1.0.kspkg",
+        "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.hevy-0.1.0.kspkg"
+      }
+    },
+    {
+      "id": "com.kosmos.toggl",
+      "manifest_id": "com.kosmos.toggl",
+      "kind": "source",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.0",
+      "repository": "makekosmos/cortex",
+      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "entrypoint": "toggl-worker.exe",
+      "icon": "icon.png",
+      "build": {
+        "provider": "toggl",
+        "target": "x86_64-pc-windows-msvc"
+      },
+      "artifact": {
+        "name": "com.kosmos.toggl-0.1.0.kspkg",
+        "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.toggl-0.1.0.kspkg"
+      }
+    }
+  ],
+  "artifacts": []
+}
