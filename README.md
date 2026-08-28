@@ -33,6 +33,11 @@ contents, hashes, and existing-release guards before creating a temporary key
 file. It publishes immutable releases and deletes the key file on every exit
 path.
 
+First-party application versions are maintained in the reviewed
+`release-bom.json`; publication reads that file rather than workflow source
+edits and validates each repository/tag/archive tuple before any signing key is
+materialized.
+
 The workflow builds the standalone crates in
 `packages/{bigfrontend,greatfrontend,leetcode,codewars,hevy,toggl}` on
 `windows-latest`. It packages each committed `manifest.json`, exact worker
