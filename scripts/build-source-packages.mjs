@@ -3,7 +3,9 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { readZip, writeZip } from "../../cortex/desktop/scripts/zip-utils.mjs";
+import { pathToFileURL } from "node:url";
+
+let zipUtils;
 
 const providers = ["bigfrontend", "greatfrontend", "leetcode", "codewars", "hevy", "toggl"];
 const target = "x86_64-pc-windows-msvc";
@@ -151,8 +153,8 @@ async function buildProvider(provider, cortex, out, sequence, dryRun) {
   ];
   const archiveName = `${manifest.id}-${manifest.version}.kspkg`;
   const archive = path.join(out, archiveName);
-  writeZip(archive, archiveBytes);
-  const entries = readZip(archive);
+  zipUtils.writeZip(archive, archiveBytes);
+  const entries = zipUtils.readZip(archive);
   const expectedNames = ["icon.png", "manifest.json", manifest.entrypoint].sort();
   if (JSON.stringify(archiveEntryNames(entries)) !== JSON.stringify(expectedNames)) fail(`${provider}: archive must contain only manifest, exact worker, and icon.png`);
   const bytes = await readFile(archive);
@@ -168,6 +170,7 @@ try {
   const args = parseArgs(process.argv);
   const cortex = path.resolve(args.cortex);
   const out = path.resolve(args.out);
+  zipUtils = await import(pathToFileURL(path.join(cortex, "desktop", "scripts", "zip-utils.mjs")).href);
   const packages = [];
   for (const provider of providers) packages.push(await buildProvider(provider, cortex, out, args.sequence, args.dryRun));
   if (!args.dryRun) {

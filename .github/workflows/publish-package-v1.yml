@@ -26,7 +26,12 @@ jobs:
     runs-on: windows-latest
     permissions: { contents: read }
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Check out catalog tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check out Cortex source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: makekosmos/cortex
           ref: ${{ inputs.source_ref }}
