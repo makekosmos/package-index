@@ -84,7 +84,7 @@ jobs:
           [[ "$previous_sequence" =~ ^[1-9][0-9]*$ ]]
           gh release download "catalog-$previous_sequence" --repo makekosmos/package-index --pattern catalog.json --dir out/previous
           node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds --print-downloads > out/bom-downloads.tsv
-          node -e 'const fs=require("node:fs"),bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));for(const source of Object.values(bom.source).filter((value)=>value?.repository&&value?.commit))console.log(`${source.repository}\t${source.commit}`)' > out/bom-sources.tsv
+          node -e 'const fs=require("node:fs"),bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));for(const source of Object.values(bom.source).filter((value)=>value?.repository&&value?.commit))console.log([source.repository,source.commit].join("\t"))' > out/bom-sources.tsv
           [[ -n "${KOSMOS_SOURCE_REPO_TOKEN:-}" ]]
           while IFS=$'\t' read -r repository commit; do
             [[ "$(GH_TOKEN="$KOSMOS_SOURCE_REPO_TOKEN" gh api "repos/$repository/commits/$commit" --jq .sha)" == "$commit" ]]
@@ -125,5 +125,8 @@ jobs:
           rm -f "$CATALOG_INPUT" out/bom-downloads.tsv out/bom-sources.tsv out/store-catalog.json
           node cortex/desktop/scripts/package-sign.mjs --input "$CATALOG" --output "$SIGNATURES" --signer "$BOM_SIGNING_KEY_ID=$KEY_PATH"
           node cortex/desktop/scripts/package-envelope.mjs --catalog "$CATALOG" --signatures "$SIGNATURES" --output "$ENVELOPE"
-          gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1 && exit 1 || true
+          if gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1; then
+            echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2
+            exit 1
+          fi
           gh release create "catalog-$CATALOG_SEQUENCE" "$CATALOG" "$ENVELOPE" "$SIGNATURES" "$BOM_RESOLVED" out/*.kspkg --repo makekosmos/package-index --target "$BOM_REF" --title "Package catalog $CATALOG_SEQUENCE" --notes "Immutable catalog and release BOM from Cortex $SOURCE_REF."
