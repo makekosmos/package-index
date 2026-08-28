@@ -63,8 +63,7 @@ jobs:
           node scripts/validate-release-bom.mjs
           while IFS=$'\t' read -r repository tag archive; do
             gh release download "$tag" --repo "$repository" --pattern "$archive" --dir out
-          done < <(node --input-type=module -e 'import fs from "node:fs"; for (const item of JSON.parse(fs.readFileSync("release-bom.json")).packages) console.log([item.repository, item.tag, item.archive_name].join("\\t"))
-')
+          done < <(node --input-type=module -e 'import fs from "node:fs"; for (const item of JSON.parse(fs.readFileSync("release-bom.json")).packages) console.log([item.repository, item.tag, item.archive_name].join("\t"))')
           if gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1; then
             echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2
             exit 1
