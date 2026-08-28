@@ -5,6 +5,7 @@ on:
     paths:
       - "scripts/**"
       - "fixtures/**"
+      - "release-bom.json"
       - ".github/workflows/**"
       - "README.md"
   push:
@@ -29,6 +30,9 @@ jobs:
           node --check scripts/build-source-packages.mjs
           node --check scripts/validate-catalog-input.mjs
           node --check scripts/dry-run.mjs
+          node --check scripts/validate-release-bom.mjs
+      - name: Validate reviewed release BOM
+        run: node scripts/validate-release-bom.mjs
       - name: Run fixture validator tests
         run: node --test scripts/validate-catalog-input.test.mjs
       - name: Run secret-free dry-run
