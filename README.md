@@ -37,3 +37,17 @@ The workflow builds the standalone crates in
 `windows-latest`. It packages each committed `manifest.json`, exact worker
 executable, and `icon.png`, then rejects any artifact that is not the expected
 Windows `source` package with a valid permissions and integration contract.
+
+## Pull-request checks
+
+The secret-free quality gate validates that every workflow declares explicit
+permissions and pins actions to immutable commit SHAs. It also parses the
+publication script without downloading source packages or using release keys:
+
+```powershell
+node scripts/check-workflow-contract.mjs
+node --check scripts/build-source-packages.mjs
+```
+
+Catalog construction and fixture-based dry-run tests remain follow-up work for
+issue #1; production publication is never run by pull-request CI.
