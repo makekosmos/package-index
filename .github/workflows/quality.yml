@@ -1,0 +1,41 @@
+name: Package Index quality
+
+on:
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "fixtures/**"
+      - "release-bom.json"
+      - ".github/workflows/**"
+      - "README.md"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-index-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check workflow contract
+        run: node scripts/check-workflow-contract.mjs
+      - name: Check publication script syntax
+        run: |
+          node --check scripts/build-source-packages.mjs
+          node --check scripts/validate-catalog-input.mjs
+          node --check scripts/dry-run.mjs
+          node --check scripts/validate-release-bom.mjs
+      - name: Validate reviewed release BOM
+        run: node scripts/validate-release-bom.mjs
+      - name: Run fixture validator tests
+        run: node --test scripts/validate-catalog-input.test.mjs
+      - name: Run secret-free dry-run
+        run: node scripts/dry-run.mjs
+      - name: Actionlint
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2

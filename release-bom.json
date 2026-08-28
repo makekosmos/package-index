@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "policy": "reviewed-release-bom",
+  "packages": [
+    {
+      "id": "com.kosmos.arcadia",
+      "repository": "makekosmos/arcadia",
+      "tag": "v0.1.8",
+      "archive_name": "com.kosmos.arcadia-0.1.8.kspkg"
+    },
+    {
+      "id": "com.kosmos.dictation",
+      "repository": "makekosmos/dictation",
+      "tag": "v0.2.2",
+      "archive_name": "dictation-0.2.2.kspkg"
+    },
+    {
+      "id": "com.kosmos.agenda",
+      "repository": "makekosmos/agenda",
+      "tag": "v0.2.4",
+      "archive_name": "agenda-0.2.4.kspkg"
+    },
+    {
+      "id": "com.kosmos.memoria",
+      "repository": "makekosmos/memoria",
+      "tag": "v0.6.3",
+      "archive_name": "memoria-0.6.3.kspkg"
+    },
+    {
+      "id": "com.kosmos.ordo",
+      "repository": "makekosmos/ordo",
+      "tag": "v0.1.3",
+      "archive_name": "ordo-0.1.3.kspkg"
+    }
+  ]
+}

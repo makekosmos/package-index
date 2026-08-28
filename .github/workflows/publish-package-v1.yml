@@ -20,6 +20,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     environment: production
@@ -57,23 +60,26 @@ jobs:
           [[ "$previous_sequence" =~ ^[1-9][0-9]*$ ]]
           mkdir -p out/previous
           gh release download "catalog-$previous_sequence" --repo makekosmos/package-index --pattern catalog.json --dir out/previous
-          gh release download v0.1.8 --repo makekosmos/arcadia --pattern '*.kspkg' --dir out
-          gh release download v0.2.2 --repo makekosmos/dictation --pattern '*.kspkg' --dir out
-          gh release download v0.2.4 --repo makekosmos/agenda --pattern '*.kspkg' --dir out
-          gh release download v0.6.3 --repo makekosmos/memoria --pattern '*.kspkg' --dir out
-          gh release download v0.1.3 --repo makekosmos/ordo --pattern '*.kspkg' --dir out
+          node scripts/validate-release-bom.mjs
+          while IFS=$'\t' read -r repository tag archive; do
+            gh release download "$tag" --repo "$repository" --pattern "$archive" --dir out
+          done < <(node --input-type=module -e 'import fs from "node:fs"; for (const item of JSON.parse(fs.readFileSync("release-bom.json")).packages) console.log([item.repository, item.tag, item.archive_name].join("\t"))')
+          if gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1; then
+            echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2
+            exit 1
+          fi
           KEY_PATH="$RUNNER_TEMP/kosmos-release-private.pem"; trap 'rm -f -- "$KEY_PATH"' EXIT
           KEY_PATH="$KEY_PATH" node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.KEY_PATH,process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY,{mode:0o600})'
           unset KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY
           export CATALOG="$GITHUB_WORKSPACE/out/catalog.json" CATALOG_INPUT="$GITHUB_WORKSPACE/out/catalog.input.json" SIGNATURES="$GITHUB_WORKSPACE/out/catalog.signatures.json" ENVELOPE="$GITHUB_WORKSPACE/out/catalog.envelope.json"
           node --input-type=module - <<'NODE'
           const crypto=await import("node:crypto"),fs=await import("node:fs"),path=await import("node:path"),{pathToFileURL}=await import("node:url"),out=path.join(process.env.GITHUB_WORKSPACE,"out"),{readZip}=await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE,"cortex/desktop/scripts/zip-utils.mjs")).href);
-          const prior=JSON.parse(fs.readFileSync(path.join(out,"previous","catalog.json"))),sequence=Number(process.env.CATALOG_SEQUENCE),replaced=new Set(["com.kosmos.eden","com.kosmos.delphi","com.kosmos.arcadia","com.kosmos.dictation","com.kosmos.agenda","com.kosmos.memoria","com.kosmos.focus","com.kosmos.bigfrontend","com.kosmos.greatfrontend","com.kosmos.leetcode","com.kosmos.codewars","com.kosmos.hevy","com.kosmos.toggl"]);
+          const prior=JSON.parse(fs.readFileSync(path.join(out,"previous","catalog.json"))),bom=JSON.parse(fs.readFileSync(path.join(process.env.GITHUB_WORKSPACE,"release-bom.json"))),sequence=Number(process.env.CATALOG_SEQUENCE),replaced=new Set(["com.kosmos.eden","com.kosmos.delphi","com.kosmos.arcadia","com.kosmos.dictation","com.kosmos.agenda","com.kosmos.memoria","com.kosmos.focus","com.kosmos.bigfrontend","com.kosmos.greatfrontend","com.kosmos.leetcode","com.kosmos.codewars","com.kosmos.hevy","com.kosmos.toggl"]);
           const packageFrom=(file)=>{const archive=path.join(out,file),manifest=JSON.parse(readZip(archive).find(e=>e.name==="manifest.json"&&!e.isDir).data.toString("utf8")),bytes=fs.readFileSync(archive);if(manifest.schema_version!==2||manifest.kind!=="app"||manifest.entrypoint!=="dist/index.html"||manifest.icon!=="icon.png")throw new Error(`invalid package ${file}`);return {manifest,archive_url:`https://github.com/makekosmos/package-index/releases/download/catalog-${process.env.CATALOG_SEQUENCE}/${file}`,sha256:crypto.createHash("sha256").update(bytes).digest("hex"),size:bytes.length};};
-          const apps=[packageFrom("com.kosmos.arcadia-0.1.8.kspkg"),packageFrom("dictation-0.2.2.kspkg"),packageFrom("agenda-0.2.4.kspkg"),packageFrom("memoria-0.6.3.kspkg"),packageFrom("ordo-0.1.3.kspkg")];
+          const apps=bom.packages.map((item)=>packageFrom(item.archive_name));
           const sourceCatalog=JSON.parse(fs.readFileSync(path.join(out,"source-packages.json"))),sources=sourceCatalog.packages;
           if(sourceCatalog.schema_version!==1||sources.length!==6||sources.some((entry)=>entry.manifest?.kind!=="source"||entry.manifest?.version!=="0.1.0"))throw new Error("unexpected source package catalog");
-          if(apps.some((app,index)=>app.manifest.id!==["com.kosmos.arcadia","com.kosmos.dictation","com.kosmos.agenda","com.kosmos.memoria","com.kosmos.focus"][index]))throw new Error("unexpected release manifests");
+          if(apps.some((app,index)=>app.manifest.id!==bom.packages[index].id))throw new Error("unexpected release manifests");
           const issued=Date.parse(process.env.CATALOG_ISSUED_AT),expires=Date.parse(process.env.CATALOG_EXPIRES_AT);if(!Number.isInteger(sequence)||sequence<=1||!Number.isFinite(issued)||!Number.isFinite(expires)||expires<=issued||expires-issued>366*86400000)throw new Error("invalid catalog metadata");if(prior.sequence!==sequence-1)throw new Error("prior catalog sequence mismatch");
           fs.writeFileSync(process.env.CATALOG_INPUT,JSON.stringify({schema_version:1,sequence,issued_at:process.env.CATALOG_ISSUED_AT,expires_at:process.env.CATALOG_EXPIRES_AT,packages:[...prior.packages.filter(p=>!replaced.has(p.manifest.id)),...apps,...sources]},null,2));
           NODE
@@ -81,5 +87,4 @@ jobs:
           rm -f "$CATALOG_INPUT"
           node cortex/desktop/scripts/package-sign.mjs --input "$CATALOG" --output "$SIGNATURES" --signer "kosmos-release-2026=$KEY_PATH"
           node cortex/desktop/scripts/package-envelope.mjs --catalog "$CATALOG" --signatures "$SIGNATURES" --output "$ENVELOPE"
-          gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1 && exit 1 || true
           gh release create "catalog-$CATALOG_SEQUENCE" "$CATALOG" "$ENVELOPE" "$SIGNATURES" out/*.kspkg --repo makekosmos/package-index --title "Package catalog $CATALOG_SEQUENCE" --notes "Six provider integrations, Agenda, Memoria, Ordo, Arcadia, and Dictation replace retired Eden and Delphi."
