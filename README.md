@@ -28,6 +28,12 @@ expires_at=2026-09-01T16:00:00Z
 The production environment must provide only these secret names:
 `KOSMOS_SOURCE_REPO_TOKEN`, `KOSMOS_RELEASE_REPO_TOKEN`, and
 `KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY`. The workflow never puts the private key
-in arguments or logs, publishes the immutable Shell release before the
+in arguments or logs, publishes the package archives before the
 `catalog-<sequence>` release, refuses existing tags, and deletes its temporary
 key file on every exit path.
+
+The workflow builds the standalone crates in
+`packages/{bigfrontend,greatfrontend,leetcode,codewars,hevy,toggl}` on
+`windows-latest`. It packages each committed `manifest.json`, exact worker
+executable, and `icon.png`, then rejects any artifact that is not the expected
+Windows `source` package with a valid permissions and integration contract.
