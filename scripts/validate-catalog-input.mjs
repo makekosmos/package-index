@@ -83,7 +83,7 @@ export function verifyEnvelope(catalogBytes, envelope, publicKey) {
   }
   const signature = Buffer.from(envelope.signature || "", "base64");
   if (signature.length !== 64) throw new Error("envelope signature is invalid");
-  const key = crypto.createPublicKey(publicKey);
+  const key = publicKey?.type === "public" ? publicKey : crypto.createPublicKey(publicKey);
   if (!crypto.verify(null, catalogBytes, key, signature)) throw new Error("envelope signature verification failed");
   return true;
 }
