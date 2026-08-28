@@ -84,5 +84,8 @@ jobs:
           rm -f "$CATALOG_INPUT"
           node cortex/desktop/scripts/package-sign.mjs --input "$CATALOG" --output "$SIGNATURES" --signer "kosmos-release-2026=$KEY_PATH"
           node cortex/desktop/scripts/package-envelope.mjs --catalog "$CATALOG" --signatures "$SIGNATURES" --output "$ENVELOPE"
-          gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1 && exit 1 || true
+          if gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1; then
+            echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2
+            exit 1
+          fi
           gh release create "catalog-$CATALOG_SEQUENCE" "$CATALOG" "$ENVELOPE" "$SIGNATURES" out/*.kspkg --repo makekosmos/package-index --title "Package catalog $CATALOG_SEQUENCE" --notes "Six provider integrations, Agenda, Memoria, Ordo, Arcadia, and Dictation replace retired Eden and Delphi."
