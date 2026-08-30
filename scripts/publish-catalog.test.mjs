@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { buildCatalogInput, inspectArchive, verifyPreviousPublication } from "./publish-catalog.mjs";
-import { readZip, writeZip } from "../../cortex/desktop/scripts/zip-utils.mjs";
+import { readZip, writeZip } from "./test-zip-utils.mjs";
 
 const fixture = JSON.parse(await readFile(new URL("../fixtures/catalog-input.json", import.meta.url), "utf8"));
 
