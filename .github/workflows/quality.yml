@@ -5,7 +5,8 @@ on:
     paths:
       - "scripts/**"
       - "fixtures/**"
-      - "release-bom.json"
+      - "release/**"
+      - ".githooks/**"
       - ".github/workflows/**"
       - "README.md"
   push:
@@ -27,14 +28,19 @@ jobs:
         run: node scripts/check-workflow-contract.mjs
       - name: Check publication script syntax
         run: |
+          set -Eeuo pipefail
           node --check scripts/build-source-packages.mjs
           node --check scripts/validate-catalog-input.mjs
           node --check scripts/dry-run.mjs
           node --check scripts/validate-release-bom.mjs
+          node --check scripts/publish-catalog.mjs
+          node --check scripts/check-workflow-shell.mjs
       - name: Validate reviewed release BOM
         run: node scripts/validate-release-bom.mjs
+      - name: Check workflow shell contracts
+        run: node scripts/check-workflow-shell.mjs
       - name: Run fixture validator tests
-        run: node --test scripts/validate-catalog-input.test.mjs
+        run: node --test scripts/*.test.mjs
       - name: Run secret-free dry-run
         run: node scripts/dry-run.mjs
       - name: Actionlint

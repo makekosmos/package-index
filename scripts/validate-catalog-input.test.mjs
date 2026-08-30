@@ -47,3 +47,19 @@ test("rejects a tampered envelope signature", () => {
   altered[altered.length - 2] ^= 1;
   assert.throws(() => verifyEnvelope(altered, envelope, publicKey), /hash mismatch|verification/);
 });
+
+test("verifies Cortex bytes-and-signatures envelope", () => {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519");
+  const envelope = {
+    schema_version: 1,
+    bytes: bytes.toString("base64"),
+    signatures: [{
+      key_id: "fixture",
+      algorithm: "ed25519",
+      signature: crypto.sign(null, bytes, privateKey).toString("base64"),
+    }],
+  };
+  assert.equal(verifyEnvelope(bytes, envelope, publicKey), true);
+  envelope.bytes = Buffer.from("tampered").toString("base64");
+  assert.throws(() => verifyEnvelope(bytes, envelope, publicKey), /payload mismatch/);
+});

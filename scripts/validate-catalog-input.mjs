@@ -75,6 +75,19 @@ export function validateCatalog(catalog, {
 }
 
 export function verifyEnvelope(catalogBytes, envelope, publicKey) {
+  // Production Cortex envelopes carry the catalog bytes and a sorted signature set.
+  if (envelope?.schema_version === 1 && typeof envelope.bytes === "string" && Array.isArray(envelope.signatures)) {
+    const payload = Buffer.from(envelope.bytes, "base64");
+    if (!payload.equals(catalogBytes)) throw new Error("envelope payload mismatch");
+    if (envelope.signatures.length === 0) throw new Error("envelope signature set is empty");
+    for (const item of envelope.signatures) {
+      const signature = Buffer.from(item?.signature || "", "base64");
+      if (item?.algorithm !== "ed25519" || signature.length !== 64 || !crypto.verify(null, catalogBytes, publicKey, signature)) {
+        throw new Error("envelope signature verification failed");
+      }
+    }
+    return true;
+  }
   if (!envelope || envelope.schema_version !== 1 || !Number.isSafeInteger(envelope.sequence)) {
     throw new Error("envelope metadata is invalid");
   }

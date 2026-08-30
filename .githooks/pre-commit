@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+changed=$(git diff --cached --name-only -- .github/workflows scripts fixtures release README.md)
+if [[ -n "$changed" ]]; then
+  node scripts/check-workflow-contract.mjs
+  node scripts/check-workflow-shell.mjs
+  node --test scripts/*.test.mjs
+fi

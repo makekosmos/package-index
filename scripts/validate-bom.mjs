@@ -46,7 +46,7 @@ function rejectSecrets(value) {
 function artifact(spec, { allowPendingBuilds }) {
   if (!object(spec.artifact)) fail(`${spec.id}: artifact is required`);
   const name = requiredString(spec.artifact.name, `${spec.id}.artifact.name`);
-  if (path.basename(name) !== name || name.includes("\\")) fail(`${spec.id}: artifact name must be a basename`);
+  if (path.basename(name) !== name || name.includes("\\") || !name.endsWith(".kspkg")) fail(`${spec.id}: artifact name must be a flat .kspkg basename`);
   const url = spec.artifact.url ?? spec.artifact.url_template;
   if (typeof url !== "string" || !url.startsWith("https://")) fail(`${spec.id}: artifact URL must be HTTPS`);
   if (/\/(?:latest|main|master)(?:\/|$)/i.test(url)) fail(`${spec.id}: artifact URL must be immutable`);

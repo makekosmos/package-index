@@ -35,7 +35,7 @@ file. It publishes immutable releases and deletes the key file on every exit
 path.
 
 First-party application versions are maintained in the reviewed
-`release-bom.json`; publication reads that file rather than workflow source
+`release/bom.v1.json`; publication reads that file rather than workflow source
 edits and validates each repository/tag/archive tuple before any signing key is
 materialized.
 
@@ -44,6 +44,9 @@ The workflow builds the standalone crates in
 `windows-latest`. It packages each committed `manifest.json`, exact worker
 executable, and `icon.png`, then rejects any artifact that is not the expected
 Windows `source` package with a valid permissions and integration contract.
+Catalog construction and archive inspection live in the versioned
+`scripts/publish-catalog.mjs` module; the workflow only orchestrates downloads,
+preflight checks, signing, and immutable release creation.
 
 ## Pull-request checks
 
@@ -63,6 +66,15 @@ The fixture validator is intentionally separate from production publication:
 the PR contract proves deterministic validation and signing-input handling,
 while the production workflow remains the only path allowed to use release
 credentials.
+
+Install the lightweight local hook once per checkout:
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+The hook runs the workflow contract and fixture tests when publication inputs
+change; CI remains authoritative and runs the same checks plus actionlint.
 
 ## Release BOM and dry-run
 
@@ -95,3 +107,9 @@ Rollback selects an existing immutable `catalog-N` release and its attached
 manual release tags. Download the catalog and BOM from the same release, verify
 the signed envelope and BOM hashes, and point the updater at that immutable
 catalog. A new publication must use a new sequence and a reviewed BOM.
+
+For provenance verification, use the pinned Cortex catalog verifier with the
+catalog and envelope downloaded from the same release, and verify the BOM
+artifact hashes with `validate-bom.mjs --verify-artifacts`. The verifier rejects
+payload mismatch, unknown envelope shape, invalid Ed25519 signatures, duplicate
+package IDs, mutable URLs, and incompatible Engine API ranges.
