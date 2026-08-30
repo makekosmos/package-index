@@ -41,7 +41,7 @@
     },
     "store": {
       "repository": "makekosmos/store",
-      "commit": "0e87ff87480c97b58bb56f9ff5da12d6522e3cbe"
+      "commit": "7d185a52ad1eb444f197f2d664af2cdb96738add"
     },
     "toolchain": {
       "node": "24.15.0",
@@ -58,7 +58,7 @@
   "catalog": {
     "sequence": 12,
     "previous_sequence": 11,
-    "store_sequence": 12,
+    "store_sequence": 13,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026"
   },

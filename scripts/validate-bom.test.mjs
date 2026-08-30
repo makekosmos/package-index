@@ -19,6 +19,12 @@ test("checked-in BOM is v1 and contains all catalog package inputs", async () =>
   assert.match(bom.source.core.ark_artifact.sha256, /^[0-9a-f]{64}$/);
 });
 
+test("reviewed BOM pins the authorized Store commit and envelope sequence", async () => {
+  const bom = await loadBom(bomPath, { expectedSequence: 12, allowPendingBuilds: true });
+  assert.equal(bom.source.store.commit, "7d185a52ad1eb444f197f2d664af2cdb96738add");
+  assert.equal(bom.catalog.store_sequence, 13);
+});
+
 test("source package builds use committed Cargo locks", () => {
   assert.match(builder, /"--locked"/);
 });
