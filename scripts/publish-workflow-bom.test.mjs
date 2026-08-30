@@ -24,6 +24,8 @@ test("package publication workflow consumes an immutable BOM", () => {
   assert.match(workflow, /verify-previous-catalog\.mjs/);
   assert.match(workflow, /--previous-envelope out\/previous\/catalog\.envelope\.json/);
   assert.match(workflow, /--previous-signatures out\/previous\/catalog\.signatures\.json/);
+  assert.match(workflow, /git ls-remote --exit-code .*refs\/tags\/catalog-\$CATALOG_SEQUENCE/);
+  assert.match(workflow, /case "\$tag_status" in/);
   assert.ok(workflow.indexOf("Preflight exact releases") < workflow.indexOf("secrets.KOSMOS_SOURCE_REPO_TOKEN"));
   assert.ok(workflow.indexOf("secrets.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY") > workflow.indexOf("Preflight exact releases"));
 });

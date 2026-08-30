@@ -180,6 +180,14 @@ test("archive policy rejects traversal, collisions, missing license, and extra f
     await writeArchive(symlink, spec);
     await mutateCentral(symlink, spec.entrypoint, (bytes, offset) => bytes.writeUInt32LE(0xa0000000, offset + 38));
     await assert.rejects(() => inspectArchive(spec, symlink, { readZip }, 8), /symlinks|special/);
+    const encrypted = path.join(dir, "encrypted.kspkg");
+    await writeArchive(encrypted, spec);
+    await mutateCentral(encrypted, spec.entrypoint, (bytes, offset) => bytes.writeUInt16LE(1, offset + 8));
+    await assert.rejects(() => inspectArchive(spec, encrypted, { readZip }, 8), /encrypted/);
+    const reparse = path.join(dir, "reparse.kspkg");
+    await writeArchive(reparse, spec);
+    await mutateCentral(reparse, spec.entrypoint, (bytes, offset) => bytes.writeUInt32LE(0x400, offset + 38));
+    await assert.rejects(() => inspectArchive(spec, reparse, { readZip }, 8), /reparse/);
     const bomb = path.join(dir, "ratio.kspkg");
     await writeArchive(bomb, spec);
     await mutateCentral(bomb, spec.entrypoint, (bytes, offset) => bytes.writeUInt32LE(1, offset + 20));

@@ -71,6 +71,15 @@ jobs:
             echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2
             exit 1
           fi
+          set +e
+          git ls-remote --exit-code "https://github.com/makekosmos/package-index.git" "refs/tags/catalog-$CATALOG_SEQUENCE" >/dev/null 2>&1
+          tag_status=$?
+          set -e
+          case "$tag_status" in
+            2) ;;
+            0) echo "catalog-$CATALOG_SEQUENCE tag already exists; immutable releases cannot be replaced" >&2; exit 1 ;;
+            *) echo "unable to verify catalog-$CATALOG_SEQUENCE tag" >&2; exit "$tag_status" ;;
+          esac
           gh release view "catalog-$previous_sequence" --repo makekosmos/package-index >/dev/null
           gh release download "catalog-$previous_sequence" --repo makekosmos/package-index --pattern catalog.json --pattern catalog.envelope.json --pattern catalog.signatures.json --dir out/previous
           while IFS=$'\t' read -r repository release_tag ref archive; do

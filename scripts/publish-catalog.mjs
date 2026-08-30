@@ -83,6 +83,7 @@ function zipCentralDirectory(bytes, provider) {
     if (offset + 46 > bytes.length || bytes.readUInt32LE(offset) !== 0x02014b50) fail(`${provider}: malformed ZIP central directory`);
     const compressedSize = bytes.readUInt32LE(offset + 20);
     const uncompressedSize = bytes.readUInt32LE(offset + 24);
+    const generalPurposeFlags = bytes.readUInt16LE(offset + 8);
     const nameLength = bytes.readUInt16LE(offset + 28);
     const extraLength = bytes.readUInt16LE(offset + 30);
     const commentLength = bytes.readUInt16LE(offset + 32);
@@ -98,6 +99,8 @@ function zipCentralDirectory(bytes, provider) {
     if (names.has(collision)) fail(`${provider}: ZIP entry names collide case-insensitively`);
     names.add(collision);
     const mode = (externalAttributes >>> 16) & 0xffff;
+    if ((generalPurposeFlags & 0x1) !== 0) fail(`${provider}: encrypted ZIP entries are forbidden`);
+    if ((externalAttributes & 0x400) !== 0) fail(`${provider}: ZIP reparse-point entries are forbidden`);
     if (name.endsWith("/") || (externalAttributes & 0x10) !== 0 ||
         (mode !== 0 && (mode & 0xf000) !== 0x8000)) fail(`${provider}: ZIP directories/symlinks/special files are forbidden`);
     if (compressedSize === 0 && uncompressedSize > 0 ||
