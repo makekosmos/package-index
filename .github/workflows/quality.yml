@@ -35,14 +35,25 @@ jobs:
           node --check scripts/validate-release-bom.mjs
           node --check scripts/publish-catalog.mjs
           node --check scripts/verify-previous-catalog.mjs
-          node --check scripts/test-zip-utils.mjs
           node --check scripts/check-workflow-shell.mjs
       - name: Validate reviewed release BOM
         run: node scripts/validate-release-bom.mjs
+      - name: Resolve Cortex fixture source
+        id: bom
+        run: echo "cortex_ref=$(node -e 'const bom=require(\"./release/bom.v1.json\");process.stdout.write(bom.source.cortex.commit)')" >> "$GITHUB_OUTPUT"
+      - name: Check out pinned Cortex fixture source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: makekosmos/cortex
+          ref: ${{ steps.bom.outputs.cortex_ref }}
+          persist-credentials: false
+          path: cortex
       - name: Check workflow shell contracts
         run: node scripts/check-workflow-shell.mjs
       - name: Run fixture validator tests
         run: node --test scripts/*.test.mjs
+        env:
+          CORTEX_PATH: cortex
       - name: Run secret-free dry-run
         run: node scripts/dry-run.mjs
       - name: Actionlint

@@ -4,8 +4,11 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { buildCatalogInput, inspectArchive, verifyPreviousPublication } from "./publish-catalog.mjs";
-import { readZip, writeZip } from "./test-zip-utils.mjs";
+
+const cortexPath = path.resolve(process.env.CORTEX_PATH ?? "../cortex");
+const { readZip, writeZip } = await import(pathToFileURL(path.join(cortexPath, "desktop/scripts/zip-utils.mjs")));
 
 const fixture = JSON.parse(await readFile(new URL("../fixtures/catalog-input.json", import.meta.url), "utf8"));
 
