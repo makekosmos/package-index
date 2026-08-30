@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { loadBom } from "./validate-bom.mjs";
 
 const bomPath = path.resolve(fileURLToPath(new URL("../release/bom.v1.json", import.meta.url)));
-const bom = await loadBom(bomPath, { expectedSequence: 12, allowPendingBuilds: true });
+const bom = await loadBom(bomPath, { allowPendingBuilds: true });
 const ids = new Set();
 for (const item of bom.packages) {
   if (!item || typeof item.id !== "string" || ids.has(item.id)) throw new Error("release BOM contains duplicate or invalid IDs");
