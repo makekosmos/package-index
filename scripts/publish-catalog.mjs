@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -18,6 +18,110 @@ function hash(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function publicKeyFromRawBase64(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9+/]{43}=$/.test(value)) fail("previous catalog public key is invalid");
+  const raw = Buffer.from(value, "base64");
+  return createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), raw]), format: "der", type: "spki" });
+}
+
+export async function verifyPreviousPublication({ catalogPath, envelopePath, signaturesPath, publicKey, expectedSequence, engineApiVersion, signingKeyId }) {
+  const catalogBytes = await readFile(catalogPath).catch(() => fail("previous catalog is missing"));
+  const envelope = JSON.parse(await readFile(envelopePath, "utf8").catch(() => fail("previous catalog envelope is missing")));
+  const signatures = JSON.parse(await readFile(signaturesPath, "utf8").catch(() => fail("previous catalog signatures are missing")));
+  if (!object(signatures) || signatures.schema_version !== 1 || !Array.isArray(signatures.signatures) ||
+      JSON.stringify(envelope.signatures) !== JSON.stringify(signatures)) fail("previous catalog envelope/signatures mismatch");
+  const signatureSet = signatures.signatures;
+  if (new Set(signatureSet.map((item) => item?.key_id)).size !== signatureSet.length ||
+      signatureSet.some((item) => item?.key_id !== signingKeyId)) fail("previous catalog has an unexpected signing key");
+  const key = publicKeyFromRawBase64(publicKey);
+  // Verify the exact downloaded bytes before parsing or carrying any entries forward.
+  const { verifyEnvelope } = await import("./validate-catalog-input.mjs");
+  verifyEnvelope(catalogBytes, envelope, key);
+  const catalog = JSON.parse(catalogBytes.toString("utf8"));
+  if (catalog.sequence !== Number(expectedSequence)) fail("previous catalog sequence mismatch");
+  validateCatalog(catalog, { previousSequence: Number(expectedSequence) - 1, engineApiVersion });
+  const expectedHash = hash(catalogBytes);
+  if (envelope.payload_sha256 && envelope.payload_sha256 !== expectedHash) fail("previous catalog payload hash mismatch");
+  return catalog;
+}
+
+const MAX_ENTRIES = 16;
+const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
+const MAX_COMPRESSION_RATIO = 100;
+
+function safeArchivePath(name, label) {
+  if (typeof name !== "string" || !name || name.includes("\\") || name.includes("\0") ||
+      name.startsWith("/") || /^[A-Za-z]:/.test(name) || name.includes(":")) {
+    fail(`${label} must be a safe relative POSIX path`);
+  }
+  const parts = name.split("/");
+  if (parts.some((part) => !part || part === "." || part === ".." ||
+      /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(part))) {
+    fail(`${label} contains an unsafe Windows path component`);
+  }
+  return name;
+}
+
+function zipCentralDirectory(bytes, provider) {
+  const start = Math.max(0, bytes.length - 65557);
+  let eocd = -1;
+  for (let offset = Math.max(0, bytes.length - 22); offset >= start; offset -= 1) {
+    if (bytes.readUInt32LE(offset) === 0x06054b50) { eocd = offset; break; }
+  }
+  if (eocd < 0) fail(`${provider}: ZIP end-of-central-directory is missing`);
+  const count = bytes.readUInt16LE(eocd + 10);
+  const directorySize = bytes.readUInt32LE(eocd + 12);
+  const directoryOffset = bytes.readUInt32LE(eocd + 16);
+  if (count > MAX_ENTRIES || directorySize === 0xffffffff || directoryOffset === 0xffffffff ||
+      directoryOffset + directorySize > eocd) fail(`${provider}: ZIP entry count/central directory is invalid`);
+  const entries = [];
+  let offset = directoryOffset;
+  let total = 0;
+  const names = new Set();
+  for (let index = 0; index < count; index += 1) {
+    if (offset + 46 > bytes.length || bytes.readUInt32LE(offset) !== 0x02014b50) fail(`${provider}: malformed ZIP central directory`);
+    const compressedSize = bytes.readUInt32LE(offset + 20);
+    const uncompressedSize = bytes.readUInt32LE(offset + 24);
+    const nameLength = bytes.readUInt16LE(offset + 28);
+    const extraLength = bytes.readUInt16LE(offset + 30);
+    const commentLength = bytes.readUInt16LE(offset + 32);
+    const externalAttributes = bytes.readUInt32LE(offset + 38);
+    const localOffset = bytes.readUInt32LE(offset + 42);
+    if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff || uncompressedSize > MAX_ENTRY_BYTES ||
+        compressedSize > MAX_ENTRY_BYTES || localOffset >= bytes.length) fail(`${provider}: ZIP entry size/offset is invalid`);
+    const end = offset + 46 + nameLength + extraLength + commentLength;
+    if (end > bytes.length) fail(`${provider}: ZIP central directory entry is truncated`);
+    const name = bytes.subarray(offset + 46, offset + 46 + nameLength).toString("utf8");
+    safeArchivePath(name, `${provider} archive entry`);
+    const collision = name.normalize("NFKC").toLocaleLowerCase("en-US");
+    if (names.has(collision)) fail(`${provider}: ZIP entry names collide case-insensitively`);
+    names.add(collision);
+    const mode = (externalAttributes >>> 16) & 0xffff;
+    if (name.endsWith("/") || (externalAttributes & 0x10) !== 0 ||
+        (mode !== 0 && (mode & 0xf000) !== 0x8000)) fail(`${provider}: ZIP directories/symlinks/special files are forbidden`);
+    if (compressedSize === 0 && uncompressedSize > 0 ||
+        compressedSize > 0 && uncompressedSize / compressedSize > MAX_COMPRESSION_RATIO) {
+      fail(`${provider}: ZIP compression ratio is unsafe`);
+    }
+    total += uncompressedSize;
+    if (total > MAX_TOTAL_BYTES) fail(`${provider}: ZIP uncompressed size is too large`);
+    entries.push({ name, compressedSize, uncompressedSize });
+    offset = end;
+  }
+  if (entries.length === 0) fail(`${provider}: ZIP has no entries`);
+  return entries;
+}
+
+function verifyPePlatform(data, spec, provider) {
+  if (!/\.exe$/i.test(spec.entrypoint)) return;
+  if (data.length < 64 || data.subarray(0, 2).toString("ascii") !== "MZ") fail(`${provider}: worker is not a PE executable`);
+  const peOffset = data.readUInt32LE(0x3c);
+  if (peOffset + 6 > data.length || data.readUInt32LE(peOffset) !== 0x00004550 || data.readUInt16LE(peOffset + 4) !== 0x8664) {
+    fail(`${provider}: worker is not an x86_64 Windows PE executable`);
+  }
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 2; i < argv.length; i += 1) {
@@ -25,7 +129,7 @@ function parseArgs(argv) {
     if (!flag.startsWith("--") || i + 1 >= argv.length || argv[i + 1].startsWith("--")) fail(`missing value for ${flag}`);
     args[flag.slice(2)] = argv[++i];
   }
-  for (const name of ["bom", "previous-catalog", "artifacts-dir", "source-catalog", "cortex", "sequence", "issued-at", "expires-at", "out"]) {
+  for (const name of ["bom", "previous-catalog", "previous-envelope", "previous-signatures", "artifacts-dir", "source-catalog", "cortex", "sequence", "issued-at", "expires-at", "out"]) {
     if (!args[name]) fail(`required argument --${name}`);
   }
   return args;
@@ -75,17 +179,32 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   const bytes = await readFile(archivePath).catch(() => fail(`${spec.id}: archive is missing: ${spec.artifact.name}`));
   if (spec.artifact.size !== undefined && bytes.length !== spec.artifact.size) fail(`${spec.id}: archive size mismatch`);
   if (spec.artifact.sha256 !== undefined && hash(bytes) !== spec.artifact.sha256.toLowerCase()) fail(`${spec.id}: archive SHA-256 mismatch`);
+  const central = zipCentralDirectory(bytes, spec.id);
+  safeArchivePath(spec.entrypoint, `${spec.id}.entrypoint`);
+  safeArchivePath(spec.icon, `${spec.id}.icon`);
   let entries;
   try { entries = zipUtils.readZip(archivePath); } catch (error) { fail(`${spec.id}: invalid ZIP archive: ${error.message}`); }
   const files = entries.filter((entry) => !entry.isDir);
+  if (entries.length !== central.length || files.length !== entries.length) fail(`${spec.id}: ZIP directories are forbidden`);
+  for (const entry of central) {
+    const decoded = files.find((candidate) => candidate.name === entry.name);
+    if (!decoded || decoded.data.length !== entry.uncompressedSize) fail(`${spec.id}: ZIP uncompressed size mismatch`);
+  }
   const manifestEntry = files.find((entry) => entry.name === "manifest.json");
   if (!manifestEntry) fail(`${spec.id}: archive manifest.json is missing`);
   let manifest;
   try { manifest = JSON.parse(manifestEntry.data.toString("utf8")); } catch { fail(`${spec.id}: archive manifest.json is invalid JSON`); }
   requiredManifest(manifest, spec, spec.build?.provider ?? spec.id);
-  const expected = ["manifest.json", spec.entrypoint, spec.icon].sort();
+  const licenseEntry = files.find((entry) => /^license(?:[._-].*)?$/i.test(path.posix.basename(entry.name)));
+  if (!licenseEntry && typeof manifest.license !== "string") fail(`${spec.id}: archive license is missing`);
+  const expected = ["manifest.json", spec.entrypoint, spec.icon, ...(licenseEntry ? [licenseEntry.name] : [])].sort();
   const actual = files.map((entry) => entry.name).sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${spec.id}: archive contains unexpected files`);
+  if (files.some((entry) => /\.(?:exe|dll|sys|scr|com)$/i.test(entry.name) && entry.name !== spec.entrypoint)) {
+    fail(`${spec.id}: unexpected executable or Windows binary in archive`);
+  }
+  const worker = files.find((entry) => entry.name === spec.entrypoint);
+  verifyPePlatform(worker.data, spec, spec.id);
   return {
     manifest,
     archive_url: (spec.artifact.url_template ?? spec.artifact.url).replace("{sequence}", String(sequence)),
@@ -94,7 +213,7 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   };
 }
 
-export async function preparePublication({ bomPath, previousCatalogPath, artifactsDir, sourceCatalogPath, cortexPath, sequence, issuedAt, expiresAt, outDir }) {
+export async function preparePublication({ bomPath, previousCatalogPath, previousEnvelopePath, previousSignaturesPath, artifactsDir, sourceCatalogPath, cortexPath, sequence, issuedAt, expiresAt, outDir }) {
   const bom = await loadBom(bomPath, { expectedSequence: sequence, allowPendingBuilds: true });
   const sourceCatalog = JSON.parse(await readFile(sourceCatalogPath, "utf8"));
   const sourceIds = new Set(bom.packages.filter((entry) => entry.kind === "source").map((entry) => entry.id));
@@ -117,7 +236,15 @@ export async function preparePublication({ bomPath, previousCatalogPath, artifac
   }
   const resolvedBom = { ...bom, state: "resolved", packages: resolvedEntries };
   validateBom(resolvedBom, { expectedSequence: sequence });
-  const previous = JSON.parse(await readFile(previousCatalogPath, "utf8"));
+  const previous = await verifyPreviousPublication({
+    catalogPath: previousCatalogPath,
+    envelopePath: previousEnvelopePath,
+    signaturesPath: previousSignaturesPath,
+    publicKey: bom.catalog.public_key,
+    expectedSequence: Number(sequence) - 1,
+    engineApiVersion: bom.compatibility.engine_api,
+    signingKeyId: bom.catalog.signing_key_id,
+  });
   const replacements = resolvedEntries.map((entry) => ({
     manifest: entry._manifest,
     archive_url: entry.artifact.url,
@@ -143,6 +270,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   preparePublication({
     bomPath: args.bom,
     previousCatalogPath: args["previous-catalog"],
+    previousEnvelopePath: args["previous-envelope"],
+    previousSignaturesPath: args["previous-signatures"],
     artifactsDir: args["artifacts-dir"],
     sourceCatalogPath: args["source-catalog"],
     cortexPath: args.cortex,

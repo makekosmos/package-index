@@ -47,6 +47,12 @@ Windows `source` package with a valid permissions and integration contract.
 Catalog construction and archive inspection live in the versioned
 `scripts/publish-catalog.mjs` module; the workflow only orchestrates downloads,
 preflight checks, signing, and immutable release creation.
+The no-secret preflight resolves each BOM commit and release tag exactly,
+checks the target release is unused, and verifies the previous catalog's exact
+downloaded bytes, detached signatures, and pinned public key before entries are
+carried forward. Archives are fail-closed on unsafe ZIP paths/metadata,
+compression bombs, executable extras, missing license metadata, and wrong PE
+platforms.
 
 ## Pull-request checks
 

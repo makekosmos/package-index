@@ -118,6 +118,9 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
   if (!/^[A-Za-z0-9._-]+$/.test(bom.catalog.channel)) fail("catalog.channel contains unsafe characters");
   requiredString(bom.catalog.signing_key_id, "catalog.signing_key_id");
   if (!/^[A-Za-z0-9._-]+$/.test(bom.catalog.signing_key_id)) fail("catalog.signing_key_id contains unsafe characters");
+  if (bom.release.channel === "production" && (typeof bom.catalog.public_key !== "string" || !/^[A-Za-z0-9+/]{43}=$/.test(bom.catalog.public_key))) {
+    fail("catalog.public_key must be a base64 Ed25519 public key for production BOMs");
+  }
   if (!Array.isArray(bom.retired_package_ids) || bom.retired_package_ids.some((id) => typeof id !== "string" || !id)) fail("retired_package_ids must be an array of non-empty IDs");
   if (!Array.isArray(bom.packages) || bom.packages.length === 0) fail("packages must be a non-empty array");
 

@@ -34,6 +34,7 @@ jobs:
           node --check scripts/dry-run.mjs
           node --check scripts/validate-release-bom.mjs
           node --check scripts/publish-catalog.mjs
+          node --check scripts/verify-previous-catalog.mjs
           node --check scripts/check-workflow-shell.mjs
       - name: Validate reviewed release BOM
         run: node scripts/validate-release-bom.mjs

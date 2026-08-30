@@ -19,6 +19,13 @@ test("package publication workflow consumes an immutable BOM", () => {
   assert.match(workflow, /cortex\/Cargo\.lock/);
   assert.match(workflow, /GH_TOKEN="\$KOSMOS_SOURCE_REPO_TOKEN" gh api/);
   assert.match(workflow, /--target "\$BOM_REF"/);
+  assert.match(workflow, /Preflight exact releases, refs, and previous envelope \(no secrets\)/);
+  assert.match(workflow, /refs\/tags\/\$release_tag/);
+  assert.match(workflow, /verify-previous-catalog\.mjs/);
+  assert.match(workflow, /--previous-envelope out\/previous\/catalog\.envelope\.json/);
+  assert.match(workflow, /--previous-signatures out\/previous\/catalog\.signatures\.json/);
+  assert.ok(workflow.indexOf("Preflight exact releases") < workflow.indexOf("secrets.KOSMOS_SOURCE_REPO_TOKEN"));
+  assert.ok(workflow.indexOf("secrets.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY") > workflow.indexOf("Preflight exact releases"));
 });
 
 test("no independent catalog publisher bypasses the BOM", async () => {

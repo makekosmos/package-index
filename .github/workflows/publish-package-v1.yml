@@ -52,6 +52,38 @@ jobs:
           [[ "$cortex_ref" =~ ^[0-9a-f]{40}$ ]]
           echo "cortex_ref=$cortex_ref" >> "$GITHUB_OUTPUT"
 
+      - name: Preflight exact releases, refs, and previous envelope (no secrets)
+        env:
+          BOM_PATH: ${{ inputs.bom_path }}
+          BOM_REF: ${{ inputs.bom_ref }}
+          CATALOG_SEQUENCE: ${{ inputs.sequence }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$BOM_REF" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$(git rev-parse HEAD)" == "$BOM_REF" ]]
+          [[ -f "$BOM_PATH" ]]
+          mkdir -p out/previous
+          previous_sequence=$((CATALOG_SEQUENCE - 1))
+          [[ "$previous_sequence" =~ ^[1-9][0-9]*$ ]]
+          node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds --print-downloads > out/bom-downloads.tsv
+          if gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1; then
+            echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2
+            exit 1
+          fi
+          gh release view "catalog-$previous_sequence" --repo makekosmos/package-index >/dev/null
+          gh release download "catalog-$previous_sequence" --repo makekosmos/package-index --pattern catalog.json --pattern catalog.envelope.json --pattern catalog.signatures.json --dir out/previous
+          while IFS=$'\t' read -r repository release_tag ref archive; do
+            [[ -n "$repository" && -n "$release_tag" && -n "$ref" && -n "$archive" ]]
+            [[ "$(git ls-remote "https://github.com/$repository.git" "refs/tags/$release_tag" "refs/tags/$release_tag^{}" | awk 'END {print $1}')" == "$ref" ]]
+            gh release view "$release_tag" --repo "$repository" >/dev/null
+          done < out/bom-downloads.tsv
+          node --input-type=module -e 'const fs=require("node:fs"),bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));for(const source of Object.values(bom.source).filter((value)=>value?.repository&&value?.commit))console.log([source.repository,source.commit].join("\t"))' > out/bom-sources.tsv
+          while IFS=$'\t' read -r repository commit; do
+            [[ "$(curl --fail --silent --show-error -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$repository/commits/$commit" | node --input-type=module -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).sha||""))')" == "$commit" ]]
+          done < out/bom-sources.tsv
+          node scripts/verify-previous-catalog.mjs --bom "$BOM_PATH" --catalog out/previous/catalog.json --envelope out/previous/catalog.envelope.json --signatures out/previous/catalog.signatures.json --sequence "$previous_sequence"
+
       - name: Check out Cortex source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -78,10 +110,6 @@ jobs:
           [[ "$(git rev-parse HEAD)" == "$BOM_REF" ]]
           [[ "$(git -C cortex rev-parse HEAD)" == "$SOURCE_REF" ]]
           [[ -f "$BOM_PATH" ]]
-          mkdir -p out/previous
-          previous_sequence=$((CATALOG_SEQUENCE - 1))
-          [[ "$previous_sequence" =~ ^[1-9][0-9]*$ ]]
-          gh release download "catalog-$previous_sequence" --repo makekosmos/package-index --pattern catalog.json --dir out/previous
           node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds --print-downloads > out/bom-downloads.tsv
           node -e 'const fs=require("node:fs"),bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));for(const source of Object.values(bom.source).filter((value)=>value?.repository&&value?.commit))console.log([source.repository,source.commit].join("\t"))' > out/bom-sources.tsv
           [[ -n "${KOSMOS_SOURCE_REPO_TOKEN:-}" ]]
@@ -104,7 +132,7 @@ jobs:
           node --input-type=module -e 'const fs=require("node:fs");const bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));if(bom.source.cortex.commit!==process.env.SOURCE_REF)throw new Error("source_ref does not match BOM Cortex commit");'
           node scripts/build-source-packages.mjs --bom "$BOM_PATH" --cortex cortex --out out --sequence "$CATALOG_SEQUENCE"
           export BOM_RESOLVED="$GITHUB_WORKSPACE/out/release-bom.v1.json" CATALOG="$GITHUB_WORKSPACE/out/catalog.json" CATALOG_INPUT="$GITHUB_WORKSPACE/out/catalog.input.json" SIGNATURES="$GITHUB_WORKSPACE/out/catalog.signatures.json" ENVELOPE="$GITHUB_WORKSPACE/out/catalog.envelope.json"
-          node scripts/publish-catalog.mjs --bom "$BOM_PATH" --previous-catalog out/previous/catalog.json --artifacts-dir out --source-catalog out/source-packages.json --cortex cortex --sequence "$CATALOG_SEQUENCE" --issued-at "$CATALOG_ISSUED_AT" --expires-at "$CATALOG_EXPIRES_AT" --out out
+          node scripts/publish-catalog.mjs --bom "$BOM_PATH" --previous-catalog out/previous/catalog.json --previous-envelope out/previous/catalog.envelope.json --previous-signatures out/previous/catalog.signatures.json --artifacts-dir out --source-catalog out/source-packages.json --cortex cortex --sequence "$CATALOG_SEQUENCE" --issued-at "$CATALOG_ISSUED_AT" --expires-at "$CATALOG_EXPIRES_AT" --out out
           node scripts/validate-bom.mjs --bom "$BOM_RESOLVED" --sequence "$CATALOG_SEQUENCE" --verify-artifacts --artifacts-dir out
           if gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1; then
             echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2
