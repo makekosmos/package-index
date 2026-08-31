@@ -2,13 +2,6 @@ name: Package Index quality
 
 on:
   pull_request:
-    paths:
-      - "scripts/**"
-      - "fixtures/**"
-      - "release/**"
-      - ".githooks/**"
-      - ".github/workflows/**"
-      - "README.md"
   push:
     branches: [main]
 
