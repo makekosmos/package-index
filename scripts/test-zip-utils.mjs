@@ -29,7 +29,7 @@ export function writeZip(file, entries) {
     header.writeUInt32LE(data.length, 22);
     header.writeUInt16LE(name.length, 26);
     chunks.push(header, name, data);
-    central.push({ name, data, crc: crc32(data), offset });
+    central.push({ name, data, crc: crc32(data), offset, externalAttributes: entry.externalAttributes ?? 0 });
     offset += header.length + name.length + data.length;
   }
   const centralStart = offset;
@@ -42,6 +42,7 @@ export function writeZip(file, entries) {
     header.writeUInt32LE(entry.data.length, 20);
     header.writeUInt32LE(entry.data.length, 24);
     header.writeUInt16LE(entry.name.length, 28);
+    header.writeUInt32LE(entry.externalAttributes, 38);
     header.writeUInt32LE(entry.offset, 42);
     chunks.push(header, entry.name);
     offset += header.length + entry.name.length;

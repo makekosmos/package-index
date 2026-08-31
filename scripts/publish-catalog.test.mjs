@@ -104,7 +104,7 @@ function completeManifest(spec) {
   return {
     schema_version: 2, id: spec.manifest_id, name: "Fixture", version: spec.version, kind: spec.kind,
     engine_api: spec.engine_api, entrypoint: spec.entrypoint, icon: spec.icon, publisher: "kosmos",
-    permissions: [], targets: [{ runtime: "worker", os: ["windows"] }], data: { access: [], defines: [], mappings: [] },
+    permissions: [], targets: [{ runtime: spec.kind === "app" ? "kosmos-host" : "worker", os: ["windows"] }], data: { access: [], defines: [], mappings: [] },
   };
 }
 
@@ -145,6 +145,17 @@ test("archive policy rejects traversal, collisions, missing license, and extra f
     const valid = path.join(dir, "valid.kspkg");
     await writeArchive(valid, spec);
     await assert.doesNotReject(() => inspectArchive(spec, valid, { readZip }, 8));
+    const app = path.join(dir, "app.kspkg");
+    const appSpec = archiveSpec({ kind: "app", entrypoint: "dist/index.html", build: undefined, artifact: { name: "app.kspkg", url: "https://example.test/app.kspkg" } });
+    writeZip(app, [
+      { name: "dist/", data: Buffer.alloc(0), externalAttributes: 0x10 },
+      { name: "dist/assets/", data: Buffer.alloc(0), externalAttributes: 0x10 },
+      { name: "dist/index.html", data: Buffer.from("app") },
+      { name: "dist/assets/app.js", data: Buffer.from("js") },
+      { name: "icon.png", data: Buffer.from("icon") },
+      { name: "manifest.json", data: JSON.stringify(completeManifest(appSpec)) },
+    ]);
+    await assert.doesNotReject(() => inspectArchive(appSpec, app, { readZip }, 8));
     const extra = path.join(dir, "extra.kspkg");
     await writeArchive(extra, spec, [{ name: "payload.exe", data: peFixture() }]);
     await assert.rejects(() => inspectArchive(spec, extra, { readZip }, 8), /unexpected/);
@@ -180,7 +191,7 @@ test("archive policy rejects traversal, collisions, missing license, and extra f
     const symlink = path.join(dir, "symlink.kspkg");
     await writeArchive(symlink, spec);
     await mutateCentral(symlink, spec.entrypoint, (bytes, offset) => bytes.writeUInt32LE(0xa0000000, offset + 38));
-    await assert.rejects(() => inspectArchive(spec, symlink, { readZip }, 8), /symlinks|special/);
+    await assert.rejects(() => inspectArchive(spec, symlink, { readZip }, 8), /file type/);
     const encrypted = path.join(dir, "encrypted.kspkg");
     await writeArchive(encrypted, spec);
     await mutateCentral(encrypted, spec.entrypoint, (bytes, offset) => bytes.writeUInt16LE(1, offset + 8));
