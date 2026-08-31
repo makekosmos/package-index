@@ -46,7 +46,7 @@ export async function verifyPreviousPublication({ catalogPath, envelopePath, sig
   return catalog;
 }
 
-const MAX_ENTRIES = 16;
+const MAX_ENTRIES = 512;
 const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 const MAX_COMPRESSION_RATIO = 100;
@@ -95,22 +95,25 @@ function zipCentralDirectory(bytes, provider) {
     const end = offset + 46 + nameLength + extraLength + commentLength;
     if (end > bytes.length) fail(`${provider}: ZIP central directory entry is truncated`);
     const name = bytes.subarray(offset + 46, offset + 46 + nameLength).toString("utf8");
-    safeArchivePath(name, `${provider} archive entry`);
-    const collision = name.normalize("NFKC").toLocaleLowerCase("en-US");
+    const isDir = name.endsWith("/");
+    safeArchivePath(isDir ? name.slice(0, -1) : name, `${provider} archive entry`);
+    const collision = (isDir ? name.slice(0, -1) : name).normalize("NFKC").toLocaleLowerCase("en-US");
     if (names.has(collision)) fail(`${provider}: ZIP entry names collide case-insensitively`);
     names.add(collision);
     const mode = (externalAttributes >>> 16) & 0xffff;
     if ((generalPurposeFlags & 0x1) !== 0) fail(`${provider}: encrypted ZIP entries are forbidden`);
     if ((externalAttributes & 0x400) !== 0) fail(`${provider}: ZIP reparse-point entries are forbidden`);
-    if (name.endsWith("/") || (externalAttributes & 0x10) !== 0 ||
-        (mode !== 0 && (mode & 0xf000) !== 0x8000)) fail(`${provider}: ZIP directories/symlinks/special files are forbidden`);
+    const dosDirectory = (externalAttributes & 0x10) !== 0;
+    if (isDir ? (!dosDirectory || compressedSize !== 0 || uncompressedSize !== 0 ||
+        (mode !== 0 && (mode & 0xf000) !== 0x4000)) : (dosDirectory ||
+        (mode !== 0 && (mode & 0xf000) !== 0x8000))) fail(`${provider}: invalid ZIP file type`);
     if (compressedSize === 0 && uncompressedSize > 0 ||
         compressedSize > 0 && uncompressedSize / compressedSize > MAX_COMPRESSION_RATIO) {
       fail(`${provider}: ZIP compression ratio is unsafe`);
     }
     total += uncompressedSize;
     if (total > MAX_TOTAL_BYTES) fail(`${provider}: ZIP uncompressed size is too large`);
-    entries.push({ name, compressedSize, uncompressedSize });
+    entries.push({ name, compressedSize, uncompressedSize, isDir });
     offset = end;
   }
   if (entries.length === 0) fail(`${provider}: ZIP has no entries`);
@@ -148,8 +151,9 @@ function requiredManifest(manifest, spec, provider) {
       !Array.isArray(manifest.data.access) || !Array.isArray(manifest.data.defines) || !Array.isArray(manifest.data.mappings)) {
     fail(`${provider}: archive manifest does not match the reviewed BOM contract`);
   }
-  if (!manifest.targets.some((target) => target?.runtime === "worker" && Array.isArray(target.os) && target.os.includes("windows"))) {
-    fail(`${provider}: archive manifest has no Windows worker target`);
+  const runtime = spec.kind === "app" ? "kosmos-host" : "worker";
+  if (!manifest.targets.some((target) => target?.runtime === runtime && Array.isArray(target.os) && target.os.includes("windows"))) {
+    fail(`${provider}: archive manifest has no Windows ${runtime} target`);
   }
   return manifest;
 }
@@ -189,9 +193,10 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   let entries;
   try { entries = zipUtils.readZip(archivePath); } catch (error) { fail(`${spec.id}: invalid ZIP archive: ${error.message}`); }
   const files = entries.filter((entry) => !entry.isDir);
-  if (entries.length !== central.length || files.length !== entries.length) fail(`${spec.id}: ZIP directories are forbidden`);
+  if (entries.length !== central.length) fail(`${spec.id}: ZIP directory views disagree`);
   for (const entry of central) {
     const decoded = files.find((candidate) => candidate.name === entry.name);
+    if (entry.isDir) continue;
     if (!decoded || decoded.data.length !== entry.uncompressedSize) fail(`${spec.id}: ZIP uncompressed size mismatch`);
   }
   const manifestEntry = files.find((entry) => entry.name === "manifest.json");
@@ -200,10 +205,12 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   try { manifest = JSON.parse(manifestEntry.data.toString("utf8")); } catch { fail(`${spec.id}: archive manifest.json is invalid JSON`); }
   requiredManifest(manifest, spec, spec.build?.provider ?? spec.id);
   const licenseEntry = files.find((entry) => /^license(?:[._-].*)?$/i.test(path.posix.basename(entry.name)));
-  if (!licenseEntry && typeof manifest.license !== "string") fail(`${spec.id}: archive license is missing`);
+  if (spec.kind !== "app" && !licenseEntry && typeof manifest.license !== "string") fail(`${spec.id}: archive license is missing`);
   const expected = ["manifest.json", spec.entrypoint, spec.icon, ...(licenseEntry ? [licenseEntry.name] : [])].sort();
   const actual = files.map((entry) => entry.name).sort();
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${spec.id}: archive contains unexpected files`);
+  if (spec.kind === "app" ? (expected.some((name) => !actual.includes(name)) ||
+      actual.some((name) => !expected.includes(name) && !name.startsWith("dist/"))) :
+      JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${spec.id}: archive contains unexpected files`);
   if (files.some((entry) => /\.(?:exe|dll|sys|scr|com)$/i.test(entry.name) && entry.name !== spec.entrypoint)) {
     fail(`${spec.id}: unexpected executable or Windows binary in archive`);
   }
