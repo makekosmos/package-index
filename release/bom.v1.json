@@ -63,10 +63,7 @@
     "signing_key_id": "kosmos-release-2026",
     "public_key": "Mr7fRkGegxRpquVQPEeMxFRMPB3tT9pDJ49ydDmomDQ="
   },
-  "retired_package_ids": [
-    "com.kosmos.eden",
-    "com.kosmos.delphi"
-  ],
+  "retired_package_ids": [],
   "packages": [
     {
       "id": "com.kosmos.arcadia",
