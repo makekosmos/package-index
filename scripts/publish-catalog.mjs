@@ -3,6 +3,7 @@ import { createHash, createPublicKey } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { loadBom, validateBom } from "./validate-bom.mjs";
 import { validateCatalog } from "./validate-catalog-input.mjs";
 
@@ -29,7 +30,7 @@ export async function verifyPreviousPublication({ catalogPath, envelopePath, sig
   const envelope = JSON.parse(await readFile(envelopePath, "utf8").catch(() => fail("previous catalog envelope is missing")));
   const signatures = JSON.parse(await readFile(signaturesPath, "utf8").catch(() => fail("previous catalog signatures are missing")));
   if (!object(signatures) || signatures.schema_version !== 1 || !Array.isArray(signatures.signatures) ||
-      JSON.stringify(envelope.signatures) !== JSON.stringify(signatures)) fail("previous catalog envelope/signatures mismatch");
+      !isDeepStrictEqual(envelope.signatures, signatures)) fail("previous catalog envelope/signatures mismatch");
   const signatureSet = signatures.signatures;
   if (new Set(signatureSet.map((item) => item?.key_id)).size !== signatureSet.length ||
       signatureSet.some((item) => item?.key_id !== signingKeyId)) fail("previous catalog has an unexpected signing key");

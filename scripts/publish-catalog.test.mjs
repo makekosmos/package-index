@@ -68,7 +68,8 @@ test("previous catalog requires exact envelope bytes, signatures, and key", asyn
     const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519");
     const rawPublicKey = publicKey.export({ format: "der", type: "spki" }).subarray(-32).toString("base64");
     const signatures = { schema_version: 1, signatures: [{ key_id: "fixture-key", algorithm: "ed25519", signature: crypto.sign(null, bytes, privateKey).toString("base64") }] };
-    const envelope = { schema_version: 1, bytes: bytes.toString("base64"), signatures };
+    const signature = signatures.signatures[0];
+    const envelope = { bytes: bytes.toString("base64"), signatures: { schema_version: 1, signatures: [{ algorithm: signature.algorithm, key_id: signature.key_id, signature: signature.signature }] } };
     await writeFile(catalogPath, bytes);
     await writeFile(envelopePath, JSON.stringify(envelope));
     await writeFile(signaturesPath, JSON.stringify(signatures));
