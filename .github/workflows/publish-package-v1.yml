@@ -54,6 +54,7 @@ jobs:
 
       - name: Preflight exact releases, refs, and previous envelope (no secrets)
         env:
+          GH_TOKEN: ${{ github.token }}
           BOM_PATH: ${{ inputs.bom_path }}
           BOM_REF: ${{ inputs.bom_ref }}
           CATALOG_SEQUENCE: ${{ inputs.sequence }}
