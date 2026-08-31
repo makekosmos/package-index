@@ -131,7 +131,7 @@ jobs:
             GH_TOKEN="$KOSMOS_SOURCE_REPO_TOKEN" gh release download "$release_tag" --repo "$repository" --pattern "$archive" --dir out
           done < out/bom-downloads.tsv
           node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds --verify-artifacts --artifacts-dir out
-          node --input-type=module -e 'const fs=require("node:fs");const bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));if(bom.source.cortex.commit!==process.env.SOURCE_REF)throw new Error("source_ref does not match BOM Cortex commit");'
+          node -e 'const fs=require("node:fs");const bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));if(bom.source.cortex.commit!==process.env.SOURCE_REF)throw new Error("source_ref does not match BOM Cortex commit");'
           node scripts/build-source-packages.mjs --bom "$BOM_PATH" --cortex cortex --out out --sequence "$CATALOG_SEQUENCE"
           export BOM_RESOLVED="$GITHUB_WORKSPACE/out/release-bom.v1.json" CATALOG="$GITHUB_WORKSPACE/out/catalog.json" CATALOG_INPUT="$GITHUB_WORKSPACE/out/catalog.input.json" SIGNATURES="$GITHUB_WORKSPACE/out/catalog.signatures.json" ENVELOPE="$GITHUB_WORKSPACE/out/catalog.envelope.json"
           node scripts/publish-catalog.mjs --bom "$BOM_PATH" --previous-catalog out/previous/catalog.json --previous-envelope out/previous/catalog.envelope.json --previous-signatures out/previous/catalog.signatures.json --artifacts-dir out --source-catalog out/source-packages.json --cortex cortex --sequence "$CATALOG_SEQUENCE" --issued-at "$CATALOG_ISSUED_AT" --expires-at "$CATALOG_EXPIRES_AT" --out out
@@ -161,7 +161,7 @@ jobs:
             exit 1
           fi
           [[ -n "${KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY:-}" ]]
-          BOM_SIGNING_KEY_ID=$(node --input-type=module -e 'const fs=require("node:fs");console.log(JSON.parse(fs.readFileSync(process.env.BOM_RESOLVED,"utf8")).catalog.signing_key_id)')
+          BOM_SIGNING_KEY_ID=$(node -e 'const fs=require("node:fs");console.log(JSON.parse(fs.readFileSync(process.env.BOM_RESOLVED,"utf8")).catalog.signing_key_id)')
           KEY_PATH="$RUNNER_TEMP/kosmos-release-private.pem"; trap 'rm -f -- "$KEY_PATH"' EXIT
           KEY_PATH="$KEY_PATH" node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.KEY_PATH,process.env.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY,{mode:0o600})'
           unset KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY
