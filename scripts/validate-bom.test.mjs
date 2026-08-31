@@ -51,6 +51,10 @@ test("duplicate IDs and mutable refs fail closed", async () => {
   const secret = JSON.parse(await readFile(bomPath, "utf8"));
   secret.signing = { private_key: "never" };
   assert.throws(() => validateBom(secret, { allowPendingBuilds: true }), /private material/);
+
+  const declarative = JSON.parse(await readFile(bomPath, "utf8"));
+  declarative.metadata = { secret_setting: "session" };
+  assert.doesNotThrow(() => validateBom(declarative, { allowPendingBuilds: true }));
 });
 
 test("artifact verification checks both size and SHA-256", async () => {
