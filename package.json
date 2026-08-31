@@ -1,0 +1,14 @@
+{
+  "name": "@makekosmos/package-index",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "scripts": {
+    "prepare": "node scripts/install-hooks.mjs",
+    "check:syntax": "node --check scripts/build-source-packages.mjs && node --check scripts/validate-catalog-input.mjs && node --check scripts/dry-run.mjs && node --check scripts/validate-release-bom.mjs && node --check scripts/publish-catalog.mjs && node --check scripts/verify-previous-catalog.mjs && node --check scripts/test-zip-utils.mjs && node --check scripts/check-workflow-shell.mjs",
+    "test": "node --test scripts/*.test.mjs",
+    "check:signature": "node scripts/check-workflow-contract.mjs && node scripts/check-workflow-shell.mjs && node scripts/validate-release-bom.mjs && bun run check:syntax && bun run test && node scripts/dry-run.mjs",
+    "check": "bun run check:signature"
+  }
+}

@@ -63,24 +63,21 @@ signature/envelope tampering tests, plus a dry-run with an ephemeral Ed25519 key
 No GitHub token, release, or production signing secret is used:
 
 ```powershell
-node scripts/check-workflow-contract.mjs
-node --test scripts/validate-catalog-input.test.mjs
-node scripts/dry-run.mjs
+bun install
+bun run check
 ```
 
+The repository has no package dependencies, so Bun intentionally produces no
+lockfile. The pinned Bun 1.3.14 install configures repository-owned pre-commit
+and pre-push hooks without downloading packages.
 The fixture validator is intentionally separate from production publication:
 the PR contract proves deterministic validation and signing-input handling,
 while the production workflow remains the only path allowed to use release
 credentials.
 
-Install the lightweight local hook once per checkout:
-
-```powershell
-git config core.hooksPath .githooks
-```
-
-The hook runs the workflow contract and fixture tests when publication inputs
-change; CI remains authoritative and runs the same checks plus actionlint.
+Pre-commit runs the workflow contract and fixture tests when publication inputs
+change. Pre-push runs the aggregate check; CI remains authoritative and adds
+the secret scan and actionlint.
 
 ## Release BOM and dry-run
 
