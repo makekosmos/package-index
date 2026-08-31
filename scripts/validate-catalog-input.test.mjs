@@ -13,6 +13,9 @@ function copy() {
 
 test("accepts valid fixture and bounded engine API range", () => {
   assert.equal(validateCatalog(catalog, { previousSequence: 6, engineApiVersion: "1.5.0" }), true);
+  const bridgeCatalog = copy();
+  bridgeCatalog.packages[0].manifest.kind = "bridge";
+  assert.equal(validateCatalog(bridgeCatalog), true);
 });
 
 for (const [name, mutate, expected] of [

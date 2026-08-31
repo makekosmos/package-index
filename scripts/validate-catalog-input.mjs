@@ -61,7 +61,7 @@ export function validateCatalog(catalog, {
     if (typeof manifest.id !== "string" || !manifest.id || ids.has(manifest.id)) throw new Error(`${prefix}: duplicate or missing manifest id`);
     ids.add(manifest.id);
     if (!version(manifest.version)) throw new Error(`${prefix}: invalid semver`);
-    if (!["app", "source"].includes(manifest.kind)) throw new Error(`${prefix}: invalid package kind`);
+    if (!["app", "source", "bridge"].includes(manifest.kind)) throw new Error(`${prefix}: invalid package kind`);
     if (manifest.kind === "app" && (typeof manifest.entrypoint !== "string" || !manifest.entrypoint.startsWith("dist/"))) {
       throw new Error(`${prefix}: app entrypoint must be under dist/`);
     }
@@ -76,7 +76,7 @@ export function validateCatalog(catalog, {
 
 export function verifyEnvelope(catalogBytes, envelope, publicKey) {
   // Production Cortex envelopes carry the catalog bytes and a sorted signature set.
-  if (envelope?.schema_version === 1 && typeof envelope.bytes === "string" && envelope.signatures) {
+  if (typeof envelope?.bytes === "string" && envelope.signatures) {
     const payload = Buffer.from(envelope.bytes, "base64");
     if (!payload.equals(catalogBytes)) throw new Error("envelope payload mismatch");
     const signatures = Array.isArray(envelope.signatures) ? envelope.signatures : envelope.signatures.signatures;
