@@ -104,7 +104,7 @@ function zipCentralDirectory(bytes, provider) {
     if ((generalPurposeFlags & 0x1) !== 0) fail(`${provider}: encrypted ZIP entries are forbidden`);
     if ((externalAttributes & 0x400) !== 0) fail(`${provider}: ZIP reparse-point entries are forbidden`);
     const dosDirectory = (externalAttributes & 0x10) !== 0;
-    if (isDir ? (!dosDirectory || compressedSize !== 0 || uncompressedSize !== 0 ||
+    if (isDir ? (compressedSize !== 0 || uncompressedSize !== 0 ||
         (mode !== 0 && (mode & 0xf000) !== 0x4000)) : (dosDirectory ||
         (mode !== 0 && (mode & 0xf000) !== 0x8000))) fail(`${provider}: invalid ZIP file type`);
     if (compressedSize === 0 && uncompressedSize > 0 ||

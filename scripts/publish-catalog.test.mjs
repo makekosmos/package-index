@@ -149,7 +149,7 @@ test("archive policy rejects traversal, collisions, missing license, and extra f
     const appSpec = archiveSpec({ kind: "app", entrypoint: "dist/index.html", build: undefined, artifact: { name: "app.kspkg", url: "https://example.test/app.kspkg" } });
     writeZip(app, [
       { name: "dist/", data: Buffer.alloc(0), externalAttributes: 0x10 },
-      { name: "dist/assets/", data: Buffer.alloc(0), externalAttributes: 0x10 },
+      { name: "dist/assets/", data: Buffer.alloc(0), externalAttributes: 0x41ff0000 },
       { name: "dist/index.html", data: Buffer.from("app") },
       { name: "dist/assets/app.js", data: Buffer.from("js") },
       { name: "icon.png", data: Buffer.from("icon") },
