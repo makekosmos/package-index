@@ -52,7 +52,7 @@ jobs:
           [[ "$cortex_ref" =~ ^[0-9a-f]{40}$ ]]
           echo "cortex_ref=$cortex_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Preflight exact releases, refs, and previous envelope (no secrets)
+      - name: Preflight target release and previous envelope (no secrets)
         env:
           GH_TOKEN: ${{ github.token }}
           BOM_PATH: ${{ inputs.bom_path }}
@@ -67,7 +67,7 @@ jobs:
           mkdir -p out/previous
           previous_sequence=$((CATALOG_SEQUENCE - 1))
           [[ "$previous_sequence" =~ ^[1-9][0-9]*$ ]]
-          node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds --print-downloads > out/bom-downloads.tsv
+          node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds
           if gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1; then
             echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2
             exit 1
@@ -83,15 +83,6 @@ jobs:
           esac
           gh release view "catalog-$previous_sequence" --repo makekosmos/package-index >/dev/null
           gh release download "catalog-$previous_sequence" --repo makekosmos/package-index --pattern catalog.json --pattern catalog.envelope.json --pattern catalog.signatures.json --dir out/previous
-          while IFS=$'\t' read -r repository release_tag ref archive; do
-            [[ -n "$repository" && -n "$release_tag" && -n "$ref" && -n "$archive" ]]
-            [[ "$(git ls-remote "https://github.com/$repository.git" "refs/tags/$release_tag" "refs/tags/$release_tag^{}" | awk 'END {print $1}')" == "$ref" ]]
-            gh release view "$release_tag" --repo "$repository" >/dev/null
-          done < out/bom-downloads.tsv
-          node --input-type=module -e 'const fs=require("node:fs"),bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));for(const source of Object.values(bom.source).filter((value)=>value?.repository&&value?.commit))console.log([source.repository,source.commit].join("\t"))' > out/bom-sources.tsv
-          while IFS=$'\t' read -r repository commit; do
-            [[ "$(curl --fail --silent --show-error -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$repository/commits/$commit" | node --input-type=module -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).sha||""))')" == "$commit" ]]
-          done < out/bom-sources.tsv
           node scripts/verify-previous-catalog.mjs --bom "$BOM_PATH" --catalog out/previous/catalog.json --envelope out/previous/catalog.envelope.json --signatures out/previous/catalog.signatures.json --sequence "$previous_sequence"
 
       - name: Check out Cortex source
@@ -135,6 +126,7 @@ jobs:
           STORE_CATALOG="$GITHUB_WORKSPACE/out/store-catalog.json" node -e 'const fs=require("node:fs"),bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8")),store=JSON.parse(fs.readFileSync(process.env.STORE_CATALOG,"utf8"));if(store.sequence!==bom.catalog.store_sequence)throw new Error("Store sequence does not match pinned Store commit")'
           while IFS=$'\t' read -r repository release_tag ref archive; do
             [[ -n "$repository" && -n "$release_tag" && -n "$ref" && -n "$archive" ]]
+            GH_TOKEN="$KOSMOS_SOURCE_REPO_TOKEN" gh api "repos/$repository/git/ref/tags/$release_tag" >/dev/null
             [[ "$(GH_TOKEN="$KOSMOS_SOURCE_REPO_TOKEN" gh api "repos/$repository/commits/$release_tag" --jq .sha)" == "$ref" ]]
             GH_TOKEN="$KOSMOS_SOURCE_REPO_TOKEN" gh release download "$release_tag" --repo "$repository" --pattern "$archive" --dir out
           done < out/bom-downloads.tsv
