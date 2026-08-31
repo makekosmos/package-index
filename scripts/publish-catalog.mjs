@@ -217,7 +217,7 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   verifyPePlatform(worker.data, spec, spec.id);
   return {
     manifest,
-    archive_url: (spec.artifact.url_template ?? spec.artifact.url).replace("{sequence}", String(sequence)),
+    archive_url: `https://github.com/makekosmos/package-index/releases/download/catalog-${sequence}/${spec.artifact.name}`,
     sha256: hash(bytes),
     size: bytes.length,
   };

@@ -155,7 +155,8 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
       { name: "icon.png", data: Buffer.from("icon") },
       { name: "manifest.json", data: JSON.stringify(completeManifest(appSpec)) },
     ]);
-    await assert.doesNotReject(() => inspectArchive(appSpec, app, { readZip }, 8));
+    const inspectedApp = await inspectArchive(appSpec, app, { readZip }, 8);
+    assert.equal(inspectedApp.archive_url, "https://github.com/makekosmos/package-index/releases/download/catalog-8/app.kspkg");
     const extra = path.join(dir, "extra.kspkg");
     await writeArchive(extra, spec, [{ name: "payload.exe", data: peFixture() }]);
     await assert.rejects(() => inspectArchive(spec, extra, { readZip }, 8), /unexpected/);
