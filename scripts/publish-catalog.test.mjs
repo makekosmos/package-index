@@ -138,7 +138,7 @@ async function mutateCentral(file, entryName, mutate) {
   await writeFile(file, bytes);
 }
 
-test("archive policy rejects traversal, collisions, missing license, and extra files", async () => {
+test("archive policy rejects traversal, collisions, and extra files", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "kosmos-archive-"));
   try {
     const spec = archiveSpec();
@@ -159,14 +159,6 @@ test("archive policy rejects traversal, collisions, missing license, and extra f
     const extra = path.join(dir, "extra.kspkg");
     await writeArchive(extra, spec, [{ name: "payload.exe", data: peFixture() }]);
     await assert.rejects(() => inspectArchive(spec, extra, { readZip }, 8), /unexpected/);
-    const noLicense = path.join(dir, "no-license.kspkg");
-    const noLicenseSpec = { ...spec, artifact: { name: "no-license.kspkg" } };
-    writeZip(noLicense, [
-      { name: "manifest.json", data: JSON.stringify(completeManifest(noLicenseSpec)) },
-      { name: noLicenseSpec.entrypoint, data: peFixture() },
-      { name: noLicenseSpec.icon, data: Buffer.from("icon") },
-    ]);
-    await assert.rejects(() => inspectArchive(noLicenseSpec, noLicense, { readZip }, 8), /license/);
     const traversal = path.join(dir, "traversal.kspkg");
     await writeArchive(traversal, spec, [{ name: "../escape.txt", data: Buffer.from("x") }]);
     await assert.rejects(() => inspectArchive(spec, traversal, { readZip }, 8), /unsafe|unexpected/);

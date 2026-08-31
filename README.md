@@ -51,7 +51,7 @@ The no-secret preflight checks the target release is unused and verifies the
 previous catalog's exact downloaded bytes, detached signatures, and pinned
 public key. The credentialed build step resolves each private BOM commit and
 release tag exactly before the signing key is exposed. Archives are fail-closed on unsafe ZIP paths/metadata,
-compression bombs, executable extras, missing source-package license metadata, and wrong PE
+compression bombs, executable extras, and wrong PE
 platforms.
 
 ## Pull-request checks
