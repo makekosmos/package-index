@@ -19,8 +19,8 @@ test("package publication workflow consumes an immutable BOM", () => {
   assert.match(workflow, /cortex\/Cargo\.lock/);
   assert.match(workflow, /GH_TOKEN="\$KOSMOS_SOURCE_REPO_TOKEN" gh api/);
   assert.match(workflow, /--target "\$BOM_REF"/);
-  assert.match(workflow, /Preflight exact releases, refs, and previous envelope \(no secrets\)/);
-  assert.match(workflow, /refs\/tags\/\$release_tag/);
+  assert.match(workflow, /Preflight target release and previous envelope \(no secrets\)/);
+  assert.match(workflow, /git\/ref\/tags\/\$release_tag/);
   assert.match(workflow, /verify-previous-catalog\.mjs/);
   assert.match(workflow, /--previous-envelope out\/previous\/catalog\.envelope\.json/);
   assert.match(workflow, /--previous-signatures out\/previous\/catalog\.signatures\.json/);
