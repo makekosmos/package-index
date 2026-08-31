@@ -38,6 +38,7 @@ function rejectSecrets(value) {
   if (Array.isArray(value)) return value.forEach(rejectSecrets);
   if (!object(value)) return;
   for (const [key, item] of Object.entries(value)) {
+    if (key === "secret_setting" && typeof item === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(item)) continue;
     if (/private.?key|secret|token/i.test(key)) fail(`private material is forbidden: ${key}`);
     rejectSecrets(item);
   }
