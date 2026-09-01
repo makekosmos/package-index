@@ -205,7 +205,14 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   try { manifest = JSON.parse(manifestEntry.data.toString("utf8")); } catch { fail(`${spec.id}: archive manifest.json is invalid JSON`); }
   requiredManifest(manifest, spec, spec.build?.provider ?? spec.id);
   const licenseEntry = files.find((entry) => /^license(?:[._-].*)?$/i.test(path.posix.basename(entry.name)));
-  const expected = ["manifest.json", spec.entrypoint, spec.icon, ...(licenseEntry ? [licenseEntry.name] : [])].sort();
+  const compatibilityEntry = files.find((entry) => entry.name === "compatibility.json");
+  const expected = [
+    "manifest.json",
+    spec.entrypoint,
+    spec.icon,
+    ...(licenseEntry ? [licenseEntry.name] : []),
+    ...(spec.kind === "app" && compatibilityEntry ? [compatibilityEntry.name] : []),
+  ].sort();
   const actual = files.map((entry) => entry.name).sort();
   if (spec.kind === "app" ? (expected.some((name) => !actual.includes(name)) ||
       actual.some((name) => !expected.includes(name) && !name.startsWith("dist/"))) :
