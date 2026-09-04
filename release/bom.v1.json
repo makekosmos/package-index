@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "state": "candidate",
-  "id": "kosmos-package-catalog-12",
+  "id": "kosmos-package-catalog-13",
   "release": {
     "version": "0.9.15",
     "channel": "production",
@@ -56,8 +56,8 @@
     "package_schema": 2
   },
   "catalog": {
-    "sequence": 12,
-    "previous_sequence": 11,
+    "sequence": 13,
+    "previous_sequence": 12,
     "store_sequence": 13,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
@@ -88,17 +88,17 @@
       "manifest_id": "com.kosmos.dictation",
       "kind": "app",
       "engine_api": ">=1.0.0",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "repository": "makekosmos/dictation",
-      "ref": "1f103810ffcd0fc0aee36a9784d51d06f26a1989",
-      "release_tag": "v0.2.2",
+      "ref": "3b28142c48026d5cb485facce2dca65473365cac",
+      "release_tag": "v0.2.3",
       "entrypoint": "dist/index.html",
       "icon": "icon.png",
       "artifact": {
-        "name": "dictation-0.2.2.kspkg",
-        "url": "https://github.com/makekosmos/dictation/releases/download/v0.2.2/dictation-0.2.2.kspkg",
-        "sha256": "4ce3d5e438a3598af06e3152e513f7a11a0a1d252ec69a2e22b14b3a9688e0f9",
-        "size": 1302770
+        "name": "dictation-0.2.3.kspkg",
+        "url": "https://github.com/makekosmos/dictation/releases/download/v0.2.3/dictation-0.2.3.kspkg",
+        "sha256": "2571d1aff891a32f5ae3175e2ae19745bbf11999dabe203edfce89397ce94273",
+        "size": 1403994
       }
     },
     {
