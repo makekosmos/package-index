@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "state": "candidate",
-  "id": "kosmos-package-catalog-13",
+  "id": "kosmos-package-catalog-14",
   "release": {
     "version": "0.9.15",
     "channel": "production",
@@ -41,7 +41,7 @@
     },
     "store": {
       "repository": "makekosmos/store",
-      "commit": "7d185a52ad1eb444f197f2d664af2cdb96738add"
+      "commit": "2426064ff656b0cf8c636c472aa4817ae1530603"
     },
     "toolchain": {
       "node": "24.15.0",
@@ -56,9 +56,9 @@
     "package_schema": 2
   },
   "catalog": {
-    "sequence": 13,
-    "previous_sequence": 12,
-    "store_sequence": 13,
+    "sequence": 14,
+    "previous_sequence": 13,
+    "store_sequence": 14,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
     "public_key": "Mr7fRkGegxRpquVQPEeMxFRMPB3tT9pDJ49ydDmomDQ="
@@ -88,17 +88,17 @@
       "manifest_id": "com.kosmos.dictation",
       "kind": "app",
       "engine_api": ">=1.0.0",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "repository": "makekosmos/dictation",
-      "ref": "3b28142c48026d5cb485facce2dca65473365cac",
-      "release_tag": "v0.2.3",
+      "ref": "3225cea87aafcf51ce2cef4b9c6a75c83d647607",
+      "release_tag": "v0.2.4",
       "entrypoint": "dist/index.html",
       "icon": "icon.png",
       "artifact": {
-        "name": "dictation-0.2.3.kspkg",
-        "url": "https://github.com/makekosmos/dictation/releases/download/v0.2.3/dictation-0.2.3.kspkg",
-        "sha256": "2571d1aff891a32f5ae3175e2ae19745bbf11999dabe203edfce89397ce94273",
-        "size": 1403994
+        "name": "dictation-0.2.4.kspkg",
+        "url": "https://github.com/makekosmos/dictation/releases/download/v0.2.4/dictation-0.2.4.kspkg",
+        "sha256": "a7eaf9c84ee63fc01799df531ba0469390a20c4a4df6e37f1c9901af8a4c5fd5",
+        "size": 1403990
       }
     },
     {
@@ -106,17 +106,17 @@
       "manifest_id": "com.kosmos.agenda",
       "kind": "app",
       "engine_api": ">=1.0.0",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "repository": "makekosmos/agenda",
-      "ref": "ca65ad05676e998021aaf5ef5b5b6be47e1838fc",
-      "release_tag": "v0.2.4",
+      "ref": "06691c9920c6dc52f3305775209b9f16badd3c04",
+      "release_tag": "v0.2.5",
       "entrypoint": "dist/index.html",
       "icon": "icon.png",
       "artifact": {
-        "name": "agenda-0.2.4.kspkg",
-        "url": "https://github.com/makekosmos/agenda/releases/download/v0.2.4/agenda-0.2.4.kspkg",
-        "sha256": "2a143cb0f97db3a9326ac91e01e55c09516bf4613bb81d592bd87b13d12867d0",
-        "size": 710654
+        "name": "agenda-0.2.5.kspkg",
+        "url": "https://github.com/makekosmos/agenda/releases/download/v0.2.5/agenda-0.2.5.kspkg",
+        "sha256": "cdca5e3654fb9f4c8e8300be8b59d8c8fa88b80c83b42921f3fd123d08318ef3",
+        "size": 718944
       }
     },
     {
@@ -124,17 +124,17 @@
       "manifest_id": "com.kosmos.memoria",
       "kind": "app",
       "engine_api": ">=1.0.0",
-      "version": "0.6.3",
+      "version": "0.6.5",
       "repository": "makekosmos/memoria",
-      "ref": "496dc0e40cb5dd615cb62a90ffa5388ce33268ac",
-      "release_tag": "v0.6.3",
+      "ref": "3b2838ff3e2abe338d2c1b990874ac244f36a72e",
+      "release_tag": "v0.6.5",
       "entrypoint": "dist/index.html",
       "icon": "icon.png",
       "artifact": {
-        "name": "memoria-0.6.3.kspkg",
-        "url": "https://github.com/makekosmos/memoria/releases/download/v0.6.3/memoria-0.6.3.kspkg",
-        "sha256": "af03fe9c6987159e83a00938e3b98f605afc3a4cf80d93b5b9ac34d87accb86f",
-        "size": 2888653
+        "name": "memoria-0.6.5.kspkg",
+        "url": "https://github.com/makekosmos/memoria/releases/download/v0.6.5/memoria-0.6.5.kspkg",
+        "sha256": "2fe248dcf5d627d80bcc25f022cdb1cef01704a6194c735d789035f72112dd3b",
+        "size": 2861199
       }
     },
     {
