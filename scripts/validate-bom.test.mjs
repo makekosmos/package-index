@@ -31,6 +31,8 @@ test("source package builds use committed Cargo locks", () => {
 
 test("pending source artifacts are rejected unless explicitly allowed", async () => {
   const bom = JSON.parse(await readFile(bomPath, "utf8"));
+  delete bom.packages.find((entry) => entry.kind === "source").artifact.sha256;
+  delete bom.packages.find((entry) => entry.kind === "source").artifact.size;
   assert.throws(() => validateBom(bom), /artifact\.sha256 is required/);
   assert.doesNotThrow(() => validateBom(bom, { allowPendingBuilds: true }));
 });
