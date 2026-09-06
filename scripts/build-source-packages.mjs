@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { loadBom } from "./validate-bom.mjs";
@@ -107,7 +108,7 @@ async function requiredFile(file, label) {
   if (!info?.isFile() || info.size === 0) fail(`${label} is missing or empty: ${file}`);
 }
 
-function runCargo(cargoToml, binary, targetDir, target) {
+function runCargo(cargoToml, binary, targetDir, target, sourceRoot) {
   const result = spawnSync(process.env.CARGO ?? "cargo", [
     "build",
     "--manifest-path",
@@ -123,7 +124,12 @@ function runCargo(cargoToml, binary, targetDir, target) {
   ], {
     env: {
       ...process.env,
-      RUSTFLAGS: [process.env.RUSTFLAGS, target.endsWith("-windows-msvc") ? "-C link-arg=/Brepro" : ""].filter(Boolean).join(" "),
+      RUSTFLAGS: [
+        process.env.RUSTFLAGS,
+        target.endsWith("-windows-msvc") ? "-C link-arg=/Brepro" : "",
+        target.endsWith("-windows-msvc") ? `--remap-path-prefix=${path.resolve(sourceRoot)}=/cortex` : "",
+        target.endsWith("-windows-msvc") ? `--remap-path-prefix=${path.resolve(process.env.CARGO_HOME ?? path.join(os.homedir(), ".cargo"))}=/cargo` : "",
+      ].filter(Boolean).join(" "),
     },
     stdio: "inherit",
     windowsHide: true,
@@ -150,7 +156,7 @@ async function buildProvider(spec, cortex, out, sequence, dryRun) {
   const targetDir = path.join(stage, "build");
   await rm(stage, { recursive: true, force: true });
   await mkdir(stage, { recursive: true });
-  runCargo(path.join(packageDir, "Cargo.toml"), manifest.entrypoint.slice(0, -4), targetDir, spec.build.target);
+  runCargo(path.join(packageDir, "Cargo.toml"), manifest.entrypoint.slice(0, -4), targetDir, spec.build.target, cortex);
   const executable = path.join(targetDir, spec.build.target, "release", manifest.entrypoint);
   await requiredFile(executable, `${provider} worker`);
   const iconBytes = await readFile(path.join(packageDir, manifest.icon));
