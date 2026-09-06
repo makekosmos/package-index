@@ -120,8 +120,8 @@ function zipCentralDirectory(bytes, provider) {
   return entries;
 }
 
-function verifyPePlatform(data, spec, provider) {
-  if (!/\.exe$/i.test(spec.entrypoint)) return;
+function verifyPePlatform(data, entrypoint, provider) {
+  if (!/\.exe$/i.test(entrypoint)) return;
   if (data.length < 64 || data.subarray(0, 2).toString("ascii") !== "MZ") fail(`${provider}: worker is not a PE executable`);
   const peOffset = data.readUInt32LE(0x3c);
   if (peOffset + 6 > data.length || data.readUInt32LE(peOffset) !== 0x00004550 || data.readUInt16LE(peOffset + 4) !== 0x8664) {
@@ -230,7 +230,11 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
     fail(`${spec.id}: unexpected executable or Windows binary in archive`);
   }
   const worker = files.find((entry) => entry.name === spec.entrypoint);
-  verifyPePlatform(worker.data, spec, spec.id);
+  verifyPePlatform(worker.data, spec.entrypoint, spec.id);
+  for (const entrypoint of workerEntrypoints) {
+    const workerEntrypoint = files.find((entry) => entry.name === entrypoint);
+    verifyPePlatform(workerEntrypoint.data, entrypoint, spec.id);
+  }
   return {
     manifest,
     archive_url: `https://github.com/makekosmos/package-index/releases/download/catalog-${sequence}/${spec.artifact.name}`,
