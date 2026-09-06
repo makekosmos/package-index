@@ -188,7 +188,11 @@ try {
   const bom = await loadBom(args.bom, { expectedSequence: args.sequence, allowPendingBuilds: true });
   const sourceSpecs = bom.packages.filter((spec) => spec.kind === "source");
   const packages = [];
-  for (const spec of sourceSpecs) packages.push(await buildProvider(spec, cortex, out, args.sequence, args.dryRun));
+  for (const spec of sourceSpecs) {
+    const built = await buildProvider(spec, cortex, out, args.sequence, args.dryRun);
+    packages.push(built);
+    if (!args.dryRun) console.log(`${spec.build.provider}: ${built.sha256} ${built.size}`);
+  }
   if (!args.dryRun) {
     await writeFile(path.join(out, "source-packages.json"), `${JSON.stringify({ schema_version: 1, bom_id: bom.id, packages }, null, 2)}\n`);
   }
