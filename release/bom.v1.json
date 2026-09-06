@@ -58,7 +58,7 @@
   "catalog": {
     "sequence": 15,
     "previous_sequence": 14,
-    "store_sequence": 15,
+    "store_sequence": 14,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
     "public_key": "Mr7fRkGegxRpquVQPEeMxFRMPB3tT9pDJ49ydDmomDQ="

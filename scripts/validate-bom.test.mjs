@@ -22,7 +22,7 @@ test("checked-in BOM is v1 and contains all catalog package inputs", async () =>
 test("reviewed BOM pins the authorized Store commit and envelope sequence", async () => {
   const bom = await loadBom(bomPath, { expectedSequence: 15, allowPendingBuilds: true });
   assert.equal(bom.source.store.commit, "2426064ff656b0cf8c636c472aa4817ae1530603");
-  assert.equal(bom.catalog.store_sequence, 15);
+  assert.equal(bom.catalog.store_sequence, 14);
 });
 
 test("source package builds use committed Cargo locks", () => {
