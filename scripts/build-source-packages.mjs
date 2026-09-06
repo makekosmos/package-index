@@ -120,7 +120,14 @@ function runCargo(cargoToml, binary, targetDir, target) {
     target,
     "--target-dir",
     targetDir,
-  ], { stdio: "inherit", windowsHide: true });
+  ], {
+    env: {
+      ...process.env,
+      RUSTFLAGS: [process.env.RUSTFLAGS, target.endsWith("-windows-msvc") ? "-C link-arg=/Brepro" : ""].filter(Boolean).join(" "),
+    },
+    stdio: "inherit",
+    windowsHide: true,
+  });
   if (result.status !== 0) fail(`cargo build failed for ${binary}`);
 }
 
