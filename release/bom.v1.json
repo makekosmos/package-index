@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "state": "candidate",
-  "id": "kosmos-package-catalog-14",
+  "id": "kosmos-package-catalog-15",
   "release": {
     "version": "0.9.15",
     "channel": "production",
@@ -56,9 +56,9 @@
     "package_schema": 2
   },
   "catalog": {
-    "sequence": 14,
-    "previous_sequence": 13,
-    "store_sequence": 14,
+    "sequence": 15,
+    "previous_sequence": 14,
+    "store_sequence": 15,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
     "public_key": "Mr7fRkGegxRpquVQPEeMxFRMPB3tT9pDJ49ydDmomDQ="
@@ -70,17 +70,17 @@
       "manifest_id": "com.kosmos.arcadia",
       "kind": "app",
       "engine_api": ">=1.0.0",
-      "version": "0.1.8",
+      "version": "0.1.11",
       "repository": "makekosmos/arcadia",
-      "ref": "8ad099082106a7e5deb42c0fe3cb64b9b06eaf39",
-      "release_tag": "v0.1.8",
+      "ref": "7b68da25e5dd2a4433a764eb89c7ca4a2001f253",
+      "release_tag": "v0.1.11",
       "entrypoint": "dist/index.html",
       "icon": "icon.png",
       "artifact": {
-        "name": "com.kosmos.arcadia-0.1.8.kspkg",
-        "url": "https://github.com/makekosmos/arcadia/releases/download/v0.1.8/com.kosmos.arcadia-0.1.8.kspkg",
-        "sha256": "9f774db4228ee13cf7ce205f011abc52bcdbdb3b236271ad8dae6eabb4233b64",
-        "size": 692660
+        "name": "arcadia-0.1.11.kspkg",
+        "url": "https://github.com/makekosmos/arcadia/releases/download/v0.1.11/arcadia-0.1.11.kspkg",
+        "sha256": "c2b820511c97caf26696cbeb5db15f31c98617fac7cadc976162b5357f0f9f5c",
+        "size": 2746695
       }
     },
     {
