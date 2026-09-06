@@ -104,7 +104,7 @@ function completeManifest(spec) {
   return {
     schema_version: 2, id: spec.manifest_id, name: "Fixture", version: spec.version, kind: spec.kind,
     engine_api: spec.engine_api, entrypoint: spec.entrypoint, icon: spec.icon, publisher: "kosmos",
-    permissions: [], targets: [{ runtime: spec.kind === "app" ? "kosmos-host" : "worker", os: ["windows"] }], data: { access: [], defines: [], mappings: [] },
+    permissions: [], targets: spec.targets ?? [{ runtime: spec.kind === "app" ? "kosmos-host" : "worker", os: ["windows"] }], data: { access: [], defines: [], mappings: [] },
   };
 }
 
@@ -164,6 +164,20 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
     ]);
     const inspectedApp = await inspectArchive(appSpec, app, { readZip }, 8);
     assert.equal(inspectedApp.archive_url, "https://github.com/makekosmos/package-index/releases/download/catalog-8/app.kspkg");
+    const unsafeWorker = path.join(dir, "unsafe-worker.kspkg");
+    const unsafeWorkerSpec = archiveSpec({ kind: "app", entrypoint: "dist/index.html", build: undefined, artifact: { name: "unsafe-worker.kspkg" }, targets: [{ runtime: "kosmos-host", os: ["windows"] }, { runtime: "worker", os: ["windows"], entrypoint: "../escape.exe" }] });
+    await writeArchive(unsafeWorker, unsafeWorkerSpec);
+    await assert.rejects(() => inspectArchive(unsafeWorkerSpec, unsafeWorker, { readZip }, 8), /unsafe/);
+    const nonPeWorker = path.join(dir, "non-pe-worker.kspkg");
+    const nonPeWorkerSpec = archiveSpec({ kind: "app", entrypoint: "dist/index.html", build: undefined, artifact: { name: "non-pe-worker.kspkg" }, targets: [{ runtime: "kosmos-host", os: ["windows"] }, { runtime: "worker", os: ["windows"], entrypoint: "worker/fixture-worker.exe" }] });
+    writeZip(nonPeWorker, [
+      { name: "dist/", data: Buffer.alloc(0), externalAttributes: 0x10 },
+      { name: "dist/index.html", data: Buffer.from("app") },
+      { name: "icon.png", data: Buffer.from("icon") },
+      { name: "manifest.json", data: JSON.stringify(completeManifest(nonPeWorkerSpec)) },
+      { name: "worker/fixture-worker.exe", data: Buffer.from("not a PE") },
+    ]);
+    await assert.rejects(() => inspectArchive(nonPeWorkerSpec, nonPeWorker, { readZip }, 8), /PE executable/);
     const extra = path.join(dir, "extra.kspkg");
     await writeArchive(extra, spec, [{ name: "payload.exe", data: peFixture() }]);
     await assert.rejects(() => inspectArchive(spec, extra, { readZip }, 8), /unexpected/);
