@@ -155,6 +155,7 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
       { name: "icon.png", data: Buffer.from("icon") },
       { name: "manifest.json", data: JSON.stringify(completeManifest(appSpec)) },
       { name: "compatibility.json", data: JSON.stringify({ schema_version: 1 }) },
+      { name: "provenance.json", data: JSON.stringify({ schema_version: 1, source_commit: "a".repeat(40) }) },
       { name: "schemas/", data: Buffer.alloc(0), externalAttributes: 0x10 },
       { name: "schemas/example.json", data: Buffer.from("{}") },
     ]);
