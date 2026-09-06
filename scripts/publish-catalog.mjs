@@ -206,12 +206,14 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   requiredManifest(manifest, spec, spec.build?.provider ?? spec.id);
   const licenseEntry = files.find((entry) => /^license(?:[._-].*)?$/i.test(path.posix.basename(entry.name)));
   const compatibilityEntry = files.find((entry) => entry.name === "compatibility.json");
+  const provenanceEntry = files.find((entry) => entry.name === "provenance.json");
   const expected = [
     "manifest.json",
     spec.entrypoint,
     spec.icon,
     ...(licenseEntry ? [licenseEntry.name] : []),
     ...(spec.kind === "app" && compatibilityEntry ? [compatibilityEntry.name] : []),
+    ...(spec.kind === "app" && provenanceEntry ? [provenanceEntry.name] : []),
   ].sort();
   const actual = files.map((entry) => entry.name).sort();
   if (spec.kind === "app" ? (expected.some((name) => !actual.includes(name)) ||
