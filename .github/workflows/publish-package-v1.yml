@@ -130,7 +130,10 @@ jobs:
             [[ "$(GH_TOKEN="$KOSMOS_SOURCE_REPO_TOKEN" gh api "repos/$repository/commits/$release_tag" --jq .sha)" == "$ref" ]]
             GH_TOKEN="$KOSMOS_SOURCE_REPO_TOKEN" gh release download "$release_tag" --repo "$repository" --pattern "$archive" --dir out
           done < out/bom-downloads.tsv
-          node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds --verify-artifacts --artifacts-dir out
+          # Source worker archives are produced immediately below; verify the
+          # downloaded app archives here and verify the complete resolved BOM
+          # after build-source-packages and publish-catalog.
+          node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds
           node -e 'const fs=require("node:fs");const bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));if(bom.source.cortex.commit!==process.env.SOURCE_REF)throw new Error("source_ref does not match BOM Cortex commit");'
           node scripts/build-source-packages.mjs --bom "$BOM_PATH" --cortex cortex --out out --sequence "$CATALOG_SEQUENCE"
           export BOM_RESOLVED="$GITHUB_WORKSPACE/out/release-bom.v1.json" CATALOG="$GITHUB_WORKSPACE/out/catalog.json" CATALOG_INPUT="$GITHUB_WORKSPACE/out/catalog.input.json" SIGNATURES="$GITHUB_WORKSPACE/out/catalog.signatures.json" ENVELOPE="$GITHUB_WORKSPACE/out/catalog.envelope.json"
