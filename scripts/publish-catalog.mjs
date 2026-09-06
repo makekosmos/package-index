@@ -204,6 +204,11 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   let manifest;
   try { manifest = JSON.parse(manifestEntry.data.toString("utf8")); } catch { fail(`${spec.id}: archive manifest.json is invalid JSON`); }
   requiredManifest(manifest, spec, spec.build?.provider ?? spec.id);
+  const workerEntrypoints = manifest.targets
+    .filter((target) => target?.runtime === "worker")
+    .map((target) => target.entrypoint)
+    .filter((entrypoint) => typeof entrypoint === "string");
+  for (const entrypoint of workerEntrypoints) safeArchivePath(entrypoint, `${spec.id}.worker entrypoint`);
   const licenseEntry = files.find((entry) => /^license(?:[._-].*)?$/i.test(path.posix.basename(entry.name)));
   const compatibilityEntry = files.find((entry) => entry.name === "compatibility.json");
   const provenanceEntry = files.find((entry) => entry.name === "provenance.json");
@@ -214,12 +219,14 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
     ...(licenseEntry ? [licenseEntry.name] : []),
     ...(spec.kind === "app" && compatibilityEntry ? [compatibilityEntry.name] : []),
     ...(spec.kind === "app" && provenanceEntry ? [provenanceEntry.name] : []),
+    ...workerEntrypoints,
   ].sort();
   const actual = files.map((entry) => entry.name).sort();
   if (spec.kind === "app" ? (expected.some((name) => !actual.includes(name)) ||
       actual.some((name) => !expected.includes(name) && !name.startsWith("dist/") && !name.startsWith("schemas/"))) :
       JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${spec.id}: archive contains unexpected files`);
-  if (files.some((entry) => /\.(?:exe|dll|sys|scr|com)$/i.test(entry.name) && entry.name !== spec.entrypoint)) {
+  if (files.some((entry) => /\.(?:exe|dll|sys|scr|com)$/i.test(entry.name) &&
+      entry.name !== spec.entrypoint && !workerEntrypoints.includes(entry.name))) {
     fail(`${spec.id}: unexpected executable or Windows binary in archive`);
   }
   const worker = files.find((entry) => entry.name === spec.entrypoint);
