@@ -147,17 +147,20 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
     await assert.doesNotReject(() => inspectArchive(spec, valid, { readZip }, 8));
     const app = path.join(dir, "app.kspkg");
     const appSpec = archiveSpec({ kind: "app", entrypoint: "dist/index.html", build: undefined, artifact: { name: "app.kspkg", url: "https://example.test/app.kspkg" } });
+    const appManifest = completeManifest(appSpec);
+    appManifest.targets.push({ runtime: "worker", os: ["windows"], entrypoint: "worker/fixture-worker.exe" });
     writeZip(app, [
       { name: "dist/", data: Buffer.alloc(0), externalAttributes: 0x10 },
       { name: "dist/assets/", data: Buffer.alloc(0), externalAttributes: 0x41ff0000 },
       { name: "dist/index.html", data: Buffer.from("app") },
       { name: "dist/assets/app.js", data: Buffer.from("js") },
       { name: "icon.png", data: Buffer.from("icon") },
-      { name: "manifest.json", data: JSON.stringify(completeManifest(appSpec)) },
+      { name: "manifest.json", data: JSON.stringify(appManifest) },
       { name: "compatibility.json", data: JSON.stringify({ schema_version: 1 }) },
       { name: "provenance.json", data: JSON.stringify({ schema_version: 1, source_commit: "a".repeat(40) }) },
       { name: "schemas/", data: Buffer.alloc(0), externalAttributes: 0x10 },
       { name: "schemas/example.json", data: Buffer.from("{}") },
+      { name: "worker/fixture-worker.exe", data: peFixture() },
     ]);
     const inspectedApp = await inspectArchive(appSpec, app, { readZip }, 8);
     assert.equal(inspectedApp.archive_url, "https://github.com/makekosmos/package-index/releases/download/catalog-8/app.kspkg");
