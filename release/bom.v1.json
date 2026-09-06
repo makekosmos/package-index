@@ -23,20 +23,20 @@
     },
     "arca_sdk": {
       "repository": "makekosmos/arca-sdk",
-      "commit": "e2c60732f21168febbaec4aac4cd85d7cdb540af",
+      "commit": "bdf29038fa88784857b4f26fdf53111be85806c2",
       "package": {
         "name": "@makekosmos/ark",
         "version": "0.1.1",
-        "integrity": "git:e2c60732f21168febbaec4aac4cd85d7cdb540af"
+        "integrity": "git:bdf29038fa88784857b4f26fdf53111be85806c2"
       }
     },
     "imago": {
       "repository": "makekosmos/imago",
-      "commit": "9d39cdccde235b9367cb677f8107da7afd9e31fd",
+      "commit": "5ee6bd11273acf7f24bebcd8ceb869cffbb397a9",
       "package": {
         "name": "@makekosmos/visuals",
         "version": "0.1.3",
-        "integrity": "git:9d39cdccde235b9367cb677f8107da7afd9e31fd"
+        "integrity": "git:5ee6bd11273acf7f24bebcd8ceb869cffbb397a9"
       }
     },
     "store": {
