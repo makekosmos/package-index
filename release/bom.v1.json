@@ -172,8 +172,8 @@
       "artifact": {
         "name": "com.kosmos.bigfrontend-0.1.0.kspkg",
         "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.bigfrontend-0.1.0.kspkg",
-        "sha256": "a3681dc880847fa0195a21809b5bd073f6e39437dcf47e7ae5e1c9d14a534682",
-        "size": 434107
+        "sha256": "f818d5180fdd59ec728c76290eb4e3d66fa54404c3cc2b239653cbc2710329c2",
+        "size": 424891
       }
     },
     {
@@ -193,8 +193,8 @@
       "artifact": {
         "name": "com.kosmos.greatfrontend-0.1.0.kspkg",
         "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.greatfrontend-0.1.0.kspkg",
-        "sha256": "4c7d61bdbe6381272cda8a4d54baf8bb36a2f4310b6e7d37816adc3dcca3ad7c",
-        "size": 421595
+        "sha256": "0993a65799e545040eb3ff74cc50ff3ee072e0e29238fa3d5b17430bda2e20c2",
+        "size": 419035
       }
     },
     {
@@ -214,8 +214,8 @@
       "artifact": {
         "name": "com.kosmos.leetcode-0.1.0.kspkg",
         "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.leetcode-0.1.0.kspkg",
-        "sha256": "c4820fce325b4976c2363a3e1823636048b432f27c670475cee4f67fb486a620",
-        "size": 493204
+        "sha256": "1eddffc049fed0c261688f9b3a2a1f9eb47a09513cef92a758b66eb9cb69efa0",
+        "size": 488596
       }
     },
     {
@@ -235,8 +235,8 @@
       "artifact": {
         "name": "com.kosmos.codewars-0.1.0.kspkg",
         "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.codewars-0.1.0.kspkg",
-        "sha256": "ba574d830d27776412a5fa8e984e5ce580c4109c93c6f40fc13280033760f60c",
-        "size": 473420
+        "sha256": "202116bdfcf37b32907fb882acfbd0e548cecc5b8b343df7d0613316423e8de1",
+        "size": 465740
       }
     },
     {
@@ -256,8 +256,8 @@
       "artifact": {
         "name": "com.kosmos.hevy-0.1.0.kspkg",
         "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.hevy-0.1.0.kspkg",
-        "sha256": "ae9957163883f6c43e910d36c63019b5356fcc5b8b2857e2765690fc450fe088",
-        "size": 439257
+        "sha256": "cc70a458035b1b99cdda463053098fb098c1b72b8f1945e3ba0fcb53e92c5455",
+        "size": 435673
       }
     },
     {
@@ -277,8 +277,8 @@
       "artifact": {
         "name": "com.kosmos.toggl-0.1.0.kspkg",
         "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.toggl-0.1.0.kspkg",
-        "sha256": "bd908943625296fc981802e171169669c07b407cb0c529cf64323aee546e03f8",
-        "size": 441750
+        "sha256": "715e13fa5d17b69cad8eb46ef7c8ef18fc8ace7a7b0314af67dd62248a612c43",
+        "size": 437142
       }
     }
   ],
