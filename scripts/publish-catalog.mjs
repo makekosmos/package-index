@@ -215,7 +215,7 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   ].sort();
   const actual = files.map((entry) => entry.name).sort();
   if (spec.kind === "app" ? (expected.some((name) => !actual.includes(name)) ||
-      actual.some((name) => !expected.includes(name) && !name.startsWith("dist/"))) :
+      actual.some((name) => !expected.includes(name) && !name.startsWith("dist/") && !name.startsWith("schemas/"))) :
       JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${spec.id}: archive contains unexpected files`);
   if (files.some((entry) => /\.(?:exe|dll|sys|scr|com)$/i.test(entry.name) && entry.name !== spec.entrypoint)) {
     fail(`${spec.id}: unexpected executable or Windows binary in archive`);
