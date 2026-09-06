@@ -155,6 +155,8 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
       { name: "icon.png", data: Buffer.from("icon") },
       { name: "manifest.json", data: JSON.stringify(completeManifest(appSpec)) },
       { name: "compatibility.json", data: JSON.stringify({ schema_version: 1 }) },
+      { name: "schemas/", data: Buffer.alloc(0), externalAttributes: 0x10 },
+      { name: "schemas/example.json", data: Buffer.from("{}") },
     ]);
     const inspectedApp = await inspectArchive(appSpec, app, { readZip }, 8);
     assert.equal(inspectedApp.archive_url, "https://github.com/makekosmos/package-index/releases/download/catalog-8/app.kspkg");
