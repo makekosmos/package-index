@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "state": "candidate",
-  "id": "kosmos-package-catalog-15",
+  "id": "kosmos-package-catalog-16",
   "release": {
     "version": "0.9.15",
     "channel": "production",
@@ -41,7 +41,7 @@
     },
     "store": {
       "repository": "makekosmos/store",
-      "commit": "2426064ff656b0cf8c636c472aa4817ae1530603"
+    "commit": "2e6afcbc6c27514e9841a260005d92cb81e038c6"
     },
     "toolchain": {
       "node": "24.15.0",
@@ -56,9 +56,9 @@
     "package_schema": 2
   },
   "catalog": {
-    "sequence": 15,
-    "previous_sequence": 14,
-    "store_sequence": 14,
+    "sequence": 16,
+    "previous_sequence": 15,
+    "store_sequence": 16,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
     "public_key": "Mr7fRkGegxRpquVQPEeMxFRMPB3tT9pDJ49ydDmomDQ="
@@ -124,17 +124,17 @@
       "manifest_id": "com.kosmos.memoria",
       "kind": "app",
       "engine_api": ">=1.0.0",
-      "version": "0.6.5",
+      "version": "0.6.6",
       "repository": "makekosmos/memoria",
-      "ref": "3b2838ff3e2abe338d2c1b990874ac244f36a72e",
-      "release_tag": "v0.6.5",
+      "ref": "bb250542cf92a3e9d2e0305cdf775e96bdad31c2",
+      "release_tag": "v0.6.6",
       "entrypoint": "dist/index.html",
       "icon": "icon.png",
       "artifact": {
-        "name": "memoria-0.6.5.kspkg",
-        "url": "https://github.com/makekosmos/memoria/releases/download/v0.6.5/memoria-0.6.5.kspkg",
-        "sha256": "2fe248dcf5d627d80bcc25f022cdb1cef01704a6194c735d789035f72112dd3b",
-        "size": 2861199
+        "name": "memoria-0.6.6.kspkg",
+        "url": "https://github.com/makekosmos/memoria/releases/download/v0.6.6/memoria-0.6.6.kspkg",
+        "sha256": "618a8b9ce61a280afe6729b5ccb01f0282ba934bb914f21bcdef101ac1d82916",
+        "size": 2885563
       }
     },
     {
