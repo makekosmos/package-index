@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
   "state": "candidate",
-  "id": "kosmos-package-catalog-17",
+  "id": "kosmos-package-catalog-18",
   "release": {
-    "version": "0.9.15",
+    "version": "0.9.16",
     "channel": "production",
     "platform": "win"
   },
   "source": {
     "cortex": {
       "repository": "makekosmos/cortex",
-      "commit": "2fbfa5a5180bb965a1f036d67d4f8470b676b6b1"
+      "commit": "0956455e80bc2aa5359c4254bfe2971fc361451e"
     },
     "core": {
       "repository": "makekosmos/core",
@@ -56,8 +56,8 @@
     "package_schema": 2
   },
   "catalog": {
-    "sequence": 17,
-    "previous_sequence": 16,
+    "sequence": 18,
+    "previous_sequence": 17,
     "store_sequence": 16,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
@@ -162,7 +162,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "2fbfa5a5180bb965a1f036d67d4f8470b676b6b1",
+      "ref": "0956455e80bc2aa5359c4254bfe2971fc361451e",
       "entrypoint": "bigfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -183,7 +183,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "2fbfa5a5180bb965a1f036d67d4f8470b676b6b1",
+      "ref": "0956455e80bc2aa5359c4254bfe2971fc361451e",
       "entrypoint": "greatfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -204,7 +204,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "2fbfa5a5180bb965a1f036d67d4f8470b676b6b1",
+      "ref": "0956455e80bc2aa5359c4254bfe2971fc361451e",
       "entrypoint": "leetcode-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -225,7 +225,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "2fbfa5a5180bb965a1f036d67d4f8470b676b6b1",
+      "ref": "0956455e80bc2aa5359c4254bfe2971fc361451e",
       "entrypoint": "codewars-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -246,7 +246,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "2fbfa5a5180bb965a1f036d67d4f8470b676b6b1",
+      "ref": "0956455e80bc2aa5359c4254bfe2971fc361451e",
       "entrypoint": "hevy-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -267,7 +267,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "2fbfa5a5180bb965a1f036d67d4f8470b676b6b1",
+      "ref": "0956455e80bc2aa5359c4254bfe2971fc361451e",
       "entrypoint": "toggl-worker.exe",
       "icon": "icon.png",
       "build": {
