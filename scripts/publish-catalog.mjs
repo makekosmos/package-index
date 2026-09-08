@@ -47,7 +47,7 @@ export async function verifyPreviousPublication({ catalogPath, envelopePath, sig
 }
 
 const MAX_ENTRIES = 512;
-const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
+const MAX_ENTRY_BYTES = 100 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 const MAX_COMPRESSION_RATIO = 100;
 
