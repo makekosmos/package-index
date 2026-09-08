@@ -14,7 +14,7 @@
     },
     "core": {
       "repository": "makekosmos/core",
-      "commit": "ee474a2709c9871cdef09e67290883fac22e9afd",
+      "commit": "0b06342014238244749946bbe3db92d94dfa0868",
       "ark_artifact": {
         "name": "ark-core-rpc.exe",
         "sha256": "f62e214623beab8e0068342a8b564afac4f727e648043c329836eff9ee64ce98",
