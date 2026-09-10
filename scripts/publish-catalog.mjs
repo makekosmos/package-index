@@ -265,6 +265,12 @@ export async function preparePublication({ bomPath, previousCatalogPath, previou
     }});
   }
   const resolvedBom = { ...bom, state: "resolved", packages: resolvedEntries };
+  const replacements = resolvedEntries.map((entry) => ({
+    manifest: entry._manifest,
+    archive_url: entry.artifact.url,
+    sha256: entry.artifact.sha256,
+    size: entry.artifact.size,
+  }));
   // _manifest is an inspected archive detail, not part of the BOM contract.
   // Validate the public BOM after removing it so declarative field names such
   // as Huawei's `token` request field are not mistaken for embedded secrets.
@@ -279,12 +285,6 @@ export async function preparePublication({ bomPath, previousCatalogPath, previou
     engineApiVersion: bom.compatibility.engine_api,
     signingKeyId: bom.catalog.signing_key_id,
   });
-  const replacements = resolvedEntries.map((entry) => ({
-    manifest: entry._manifest,
-    archive_url: entry.artifact.url,
-    sha256: entry.artifact.sha256,
-    size: entry.artifact.size,
-  }));
   const catalog = buildCatalogInput(previous, replacements, {
     sequence: Number(sequence),
     issuedAt,
