@@ -75,7 +75,7 @@ function validateManifest(manifest, spec) {
     }
     if (setting.kind === "secret") {
       secretKeys.add(setting.key);
-      if (!object(setting.injection) || !["basic", "cookies", "header"].includes(setting.injection.kind)) {
+      if (!object(setting.injection) || !["basic", "cookies", "header", "json"].includes(setting.injection.kind)) {
         fail(`${provider}: invalid secret injection`);
       }
       if (!Array.isArray(setting.injection.origins) || setting.injection.origins.length === 0 || setting.injection.origins.some((origin) => {
@@ -88,11 +88,15 @@ function validateManifest(manifest, spec) {
     }
   }
   if (integration.login !== undefined) {
-    if (!object(integration.login) || typeof integration.login.start_url !== "string" || typeof integration.login.completion_url !== "string" || !integration.login.start_url.startsWith("https://") || !integration.login.completion_url.startsWith("https://") || !Array.isArray(integration.login.allowed_cookie_names) || integration.login.allowed_cookie_names.length === 0 || integration.login.allowed_cookie_names.some((name) => typeof name !== "string" || !name) || !secretKeys.has(integration.login.secret_setting)) {
+    const login = integration.login;
+    const huawei = object(login) && login.code_exchange === "huawei_health";
+    if (!object(login) || typeof login.start_url !== "string" || typeof login.completion_url !== "string" || !login.start_url.startsWith("https://") || (!huawei && !login.completion_url.startsWith("https://")) || !Array.isArray(login.allowed_cookie_names) || (!huawei && login.allowed_cookie_names.length === 0) || login.allowed_cookie_names.some((name) => typeof name !== "string" || !name) || !secretKeys.has(login.secret_setting)) {
       fail(`${provider}: invalid browser login contract`);
     }
-    const loginSetting = integration.settings.find((setting) => setting.key === integration.login.secret_setting);
-    if (loginSetting.injection.kind !== "cookies") fail(`${provider}: browser login requires cookie injection`);
+    const loginSetting = integration.settings.find((setting) => setting.key === login.secret_setting);
+    if (!loginSetting || (huawei ? (login.start_url !== "https://oauth-login.cloud.huawei.com/oauth2/v3/authorize" || login.completion_url !== "hms://redirect_url" || login.allowed_cookie_names.length !== 0 || loginSetting.injection.kind !== "json") : loginSetting.injection.kind !== "cookies")) {
+      fail(`${provider}: invalid login injection`);
+    }
   }
   if (!object(integration.schedule) || !Number.isSafeInteger(integration.schedule.interval_seconds) || integration.schedule.interval_seconds <= 0) {
     fail(`${provider}: integration schedule is required`);

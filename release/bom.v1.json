@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "state": "candidate",
-  "id": "kosmos-package-catalog-13",
+  "id": "kosmos-package-catalog-14",
   "release": {
     "version": "0.9.15",
     "channel": "production",
@@ -10,7 +10,7 @@
   "source": {
     "cortex": {
       "repository": "makekosmos/cortex",
-      "commit": "fbadb80d231b5aff390fd1ead15f60892d50519c"
+      "commit": "b9075c9037e3f15741de96b6e084c0955842d03b"
     },
     "core": {
       "repository": "makekosmos/core",
@@ -56,9 +56,9 @@
     "package_schema": 2
   },
   "catalog": {
-    "sequence": 13,
-    "previous_sequence": 12,
-    "store_sequence": 13,
+    "sequence": 14,
+    "previous_sequence": 13,
+    "store_sequence": 14,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
     "public_key": "Mr7fRkGegxRpquVQPEeMxFRMPB3tT9pDJ49ydDmomDQ="
@@ -162,7 +162,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "ref": "b9075c9037e3f15741de96b6e084c0955842d03b",
       "entrypoint": "bigfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -181,7 +181,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "ref": "b9075c9037e3f15741de96b6e084c0955842d03b",
       "entrypoint": "greatfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -200,7 +200,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "ref": "b9075c9037e3f15741de96b6e084c0955842d03b",
       "entrypoint": "leetcode-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -219,7 +219,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "ref": "b9075c9037e3f15741de96b6e084c0955842d03b",
       "entrypoint": "codewars-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -238,7 +238,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "ref": "b9075c9037e3f15741de96b6e084c0955842d03b",
       "entrypoint": "hevy-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -257,7 +257,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "fbadb80d231b5aff390fd1ead15f60892d50519c",
+      "ref": "b9075c9037e3f15741de96b6e084c0955842d03b",
       "entrypoint": "toggl-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -267,6 +267,25 @@
       "artifact": {
         "name": "com.kosmos.toggl-0.1.0.kspkg",
         "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.toggl-0.1.0.kspkg"
+      }
+    },
+    {
+      "id": "com.kosmos.huawei-health",
+      "manifest_id": "com.kosmos.huawei-health",
+      "kind": "source",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.0",
+      "repository": "makekosmos/cortex",
+      "ref": "b9075c9037e3f15741de96b6e084c0955842d03b",
+      "entrypoint": "huawei-health-worker.exe",
+      "icon": "icon.png",
+      "build": {
+        "provider": "huawei-health",
+        "target": "x86_64-pc-windows-msvc"
+      },
+      "artifact": {
+        "name": "com.kosmos.huawei-health-0.1.0.kspkg",
+        "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.huawei-health-0.1.0.kspkg"
       }
     }
   ],

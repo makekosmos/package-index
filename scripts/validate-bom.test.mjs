@@ -11,18 +11,18 @@ const bomPath = path.join(root, "release", "bom.v1.json");
 const builder = await readFile(path.join(root, "scripts", "build-source-packages.mjs"), "utf8");
 
 test("checked-in BOM is v1 and contains all catalog package inputs", async () => {
-  const bom = await loadBom(bomPath, { expectedSequence: 13, allowPendingBuilds: true });
-  assert.equal(bom.packages.length, 11);
+  const bom = await loadBom(bomPath, { expectedSequence: 14, allowPendingBuilds: true });
+  assert.equal(bom.packages.length, 12);
   assert.equal(bom.packages.filter((entry) => entry.kind === "app").length, 5);
-  assert.equal(bom.packages.filter((entry) => entry.kind === "source").length, 6);
+  assert.equal(bom.packages.filter((entry) => entry.kind === "source").length, 7);
   assert.ok(bom.packages.every((entry) => /^[0-9a-f]{40}$/i.test(entry.ref)));
   assert.match(bom.source.core.ark_artifact.sha256, /^[0-9a-f]{64}$/);
 });
 
 test("reviewed BOM pins the authorized Store commit and envelope sequence", async () => {
-  const bom = await loadBom(bomPath, { expectedSequence: 13, allowPendingBuilds: true });
+  const bom = await loadBom(bomPath, { expectedSequence: 14, allowPendingBuilds: true });
   assert.equal(bom.source.store.commit, "7d185a52ad1eb444f197f2d664af2cdb96738add");
-  assert.equal(bom.catalog.store_sequence, 13);
+  assert.equal(bom.catalog.store_sequence, 14);
 });
 
 test("source package builds use committed Cargo locks", () => {
