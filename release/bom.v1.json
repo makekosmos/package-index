@@ -285,7 +285,9 @@
       },
       "artifact": {
         "name": "com.kosmos.huawei-health-0.1.0.kspkg",
-        "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.huawei-health-0.1.0.kspkg"
+        "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.huawei-health-0.1.0.kspkg",
+        "sha256": "30f581a6f0ad96e65b46e1dca2891c6b3611c6e750c78759f648f9106faf5d0b",
+        "size": 550176
       }
     }
   ],
