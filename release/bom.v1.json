@@ -1,42 +1,42 @@
 {
   "schema_version": 1,
   "state": "candidate",
-  "id": "kosmos-package-catalog-20",
+  "id": "kosmos-package-catalog-21",
   "release": {
-    "version": "0.9.35",
+    "version": "0.9.36",
     "channel": "production",
     "platform": "win"
   },
   "source": {
     "cortex": {
       "repository": "makekosmos/cortex",
-      "commit": "a6af732199b80ee0bf2e622d34f329ac4276ba58"
+      "commit": "1230ef051bd9075e78e0d2059f074ff363d41558"
     },
     "core": {
       "repository": "makekosmos/core",
-      "commit": "80d74cdc711d7601db8a351ee1d26d5c1bdfe34f",
+      "commit": "169c1967a074ae6658e81d59892247b24332ce29",
       "ark_artifact": {
         "name": "ark-core-rpc.exe",
-        "sha256": "2ddc4ad036f5948657a2c3a9599f55fcda58682eeacbd9195c413475d094480d",
-        "size": 23130624
+        "sha256": "788e446b0f4ed66fc3b59edce61925d20c490d997c67eefbbf0286b58e96a763",
+        "size": 24344576
       }
     },
     "arca_sdk": {
       "repository": "makekosmos/arca-sdk",
-      "commit": "bdf29038fa88784857b4f26fdf53111be85806c2",
+      "commit": "21c2f5e157944e3444d3c0604da5a0e041116077",
       "package": {
         "name": "@makekosmos/ark",
         "version": "0.1.1",
-        "integrity": "git:bdf29038fa88784857b4f26fdf53111be85806c2"
+        "integrity": "git:21c2f5e157944e3444d3c0604da5a0e041116077"
       }
     },
     "imago": {
       "repository": "makekosmos/imago",
-      "commit": "5ee6bd11273acf7f24bebcd8ceb869cffbb397a9",
+      "commit": "b1852cab9f8f08ae0b236b7759138d3117f720b8",
       "package": {
         "name": "@makekosmos/visuals",
         "version": "0.1.3",
-        "integrity": "git:5ee6bd11273acf7f24bebcd8ceb869cffbb397a9"
+        "integrity": "git:b1852cab9f8f08ae0b236b7759138d3117f720b8"
       }
     },
     "store": {
@@ -56,8 +56,8 @@
     "package_schema": 2
   },
   "catalog": {
-    "sequence": 20,
-    "previous_sequence": 19,
+    "sequence": 21,
+    "previous_sequence": 20,
     "store_sequence": 16,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
@@ -106,17 +106,17 @@
       "manifest_id": "com.kosmos.agenda",
       "kind": "app",
       "engine_api": ">=1.0.0",
-      "version": "0.2.5",
+      "version": "0.2.6",
       "repository": "makekosmos/agenda",
-      "ref": "06691c9920c6dc52f3305775209b9f16badd3c04",
-      "release_tag": "v0.2.5",
+      "ref": "56a60e0188375766d0bdd79d673c43e688893570",
+      "release_tag": "v0.2.6",
       "entrypoint": "dist/index.html",
       "icon": "icon.png",
       "artifact": {
-        "name": "agenda-0.2.5.kspkg",
-        "url": "https://github.com/makekosmos/agenda/releases/download/v0.2.5/agenda-0.2.5.kspkg",
-        "sha256": "cdca5e3654fb9f4c8e8300be8b59d8c8fa88b80c83b42921f3fd123d08318ef3",
-        "size": 718944
+        "name": "agenda-0.2.6.kspkg",
+        "url": "https://github.com/makekosmos/agenda/releases/download/v0.2.6/agenda-0.2.6.kspkg",
+        "sha256": "4ce7cfd1ee6bbc1aade8fb937da85c291d92ce93f148f7bd1b6f8c0475dc6c32",
+        "size": 258492
       }
     },
     {
@@ -124,17 +124,17 @@
       "manifest_id": "com.kosmos.memoria",
       "kind": "app",
       "engine_api": ">=1.0.0",
-      "version": "0.6.7",
+      "version": "0.6.8",
       "repository": "makekosmos/memoria",
-      "ref": "e04ebd8bc3dab07956289ad23a257fc76a285194",
-      "release_tag": "v0.6.7",
+      "ref": "88bbcef66e8e748c184abf22611d4d70d2dee372",
+      "release_tag": "v0.6.8",
       "entrypoint": "dist/index.html",
       "icon": "icon.png",
       "artifact": {
-        "name": "memoria-0.6.7.kspkg",
-        "url": "https://github.com/makekosmos/memoria/releases/download/v0.6.7/memoria-0.6.7.kspkg",
-        "sha256": "d1b5f39c6f06b2b6a760e27ed7ece49f3d8d51079d8901f8f1c0c080737c9023",
-        "size": 2886184
+        "name": "memoria-0.6.8.kspkg",
+        "url": "https://github.com/makekosmos/memoria/releases/download/v0.6.8/memoria-0.6.8.kspkg",
+        "sha256": "480a7121436e19c47a003ad416769cb81627dee375c76acae1d2d213d22870e0",
+        "size": 2895051
       }
     },
     {
@@ -162,7 +162,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "a6af732199b80ee0bf2e622d34f329ac4276ba58",
+      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
       "entrypoint": "bigfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -181,7 +181,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "a6af732199b80ee0bf2e622d34f329ac4276ba58",
+      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
       "entrypoint": "greatfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -200,7 +200,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "a6af732199b80ee0bf2e622d34f329ac4276ba58",
+      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
       "entrypoint": "leetcode-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -219,7 +219,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "a6af732199b80ee0bf2e622d34f329ac4276ba58",
+      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
       "entrypoint": "codewars-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -238,7 +238,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "a6af732199b80ee0bf2e622d34f329ac4276ba58",
+      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
       "entrypoint": "hevy-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -257,7 +257,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "a6af732199b80ee0bf2e622d34f329ac4276ba58",
+      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
       "entrypoint": "toggl-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -276,7 +276,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "a6af732199b80ee0bf2e622d34f329ac4276ba58",
+      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
       "entrypoint": "huawei-health-worker.exe",
       "icon": "icon.png",
       "build": {
