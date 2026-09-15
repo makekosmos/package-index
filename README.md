@@ -15,7 +15,9 @@ manifest schema remains 2.
 
 ## Operator publication
 
-Run the `Publish Package v1` workflow with the immutable Package Index commit
+Publication never runs automatically: the `Publish Package v1` workflow is
+manual `workflow_dispatch` only and starts exclusively on an explicit operator
+request (KOS-76). Run it with the immutable Package Index commit
 containing the reviewed BOM, its path, and its catalog sequence:
 
 ```text
@@ -54,13 +56,15 @@ release tag exactly before the signing key is exposed. Archives are fail-closed 
 compression bombs, executable extras, and wrong PE
 platforms.
 
-## Pull-request checks
+## Quality gate
 
-The secret-free quality gate validates that every workflow declares explicit
-permissions and pins actions to immutable commit SHAs. It runs fixture-based
-schema, duplicate-ID, manifest, Engine API, hash, timestamp, sequence, and
-signature/envelope tampering tests, plus a dry-run with an ephemeral Ed25519 key.
-No GitHub token, release, or production signing secret is used:
+Hosted GitHub Actions are disabled (KOS-76): no workflow runs on `push`,
+`pull_request`, or `schedule`. The secret-free quality gate validates that
+every workflow declares explicit permissions and pins actions to immutable
+commit SHAs. It runs fixture-based schema, duplicate-ID, manifest, Engine
+API, hash, timestamp, sequence, and signature/envelope tampering tests, plus a
+dry-run with an ephemeral Ed25519 key. No GitHub token, release, or
+production signing secret is used:
 
 ```powershell
 pnpm --pm-on-fail=ignore --config.verify-deps-before-run=false --lockfile=false run check
@@ -75,8 +79,9 @@ while the production workflow remains the only path allowed to use release
 credentials.
 
 Pre-commit runs the workflow contract and fixture tests when publication inputs
-change. Pre-push runs the aggregate check; CI remains authoritative and adds
-the secret scan and actionlint.
+change. Pre-push runs the aggregate check and is authoritative; the hosted
+quality workflow (secret scan, actionlint) is manual `workflow_dispatch` only,
+so an absent or red hosted run is not a blocker.
 
 ## Release BOM and dry-run
 

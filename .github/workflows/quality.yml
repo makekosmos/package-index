@@ -1,9 +1,9 @@
 name: Package Index quality
 
+# KOS-76: hosted CI is disabled. The aggregate `pnpm ... run check` gate runs
+# locally via .githooks; this workflow is manual dispatch only.
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
