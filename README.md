@@ -63,7 +63,7 @@ signature/envelope tampering tests, plus a dry-run with an ephemeral Ed25519 key
 No GitHub token, release, or production signing secret is used:
 
 ```powershell
-pnpm --pm-on-fail=ignore --config.verify-deps-before-run=false run check
+pnpm --pm-on-fail=ignore --config.verify-deps-before-run=false --lockfile=false run check
 ```
 
 The repository has no package dependencies, so pnpm intentionally produces no
