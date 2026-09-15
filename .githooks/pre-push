@@ -1,3 +1,3 @@
 #!/bin/sh
 set -eu
-bun run check
+pnpm --pm-on-fail=ignore --config.verify-deps-before-run=false run check

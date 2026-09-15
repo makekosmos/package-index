@@ -63,13 +63,12 @@ signature/envelope tampering tests, plus a dry-run with an ephemeral Ed25519 key
 No GitHub token, release, or production signing secret is used:
 
 ```powershell
-bun install
-bun run check
+pnpm --pm-on-fail=ignore --config.verify-deps-before-run=false run check
 ```
 
-The repository has no package dependencies, so Bun intentionally produces no
-lockfile. The pinned Bun 1.3.14 install configures repository-owned pre-commit
-and pre-push hooks without downloading packages.
+The repository has no package dependencies, so pnpm intentionally produces no
+lockfile. Run `pnpm --pm-on-fail=ignore install --lockfile=false` to configure repository-owned
+pre-commit and pre-push hooks without downloading packages.
 The fixture validator is intentionally separate from production publication:
 the PR contract proves deterministic validation and signing-input handling,
 while the production workflow remains the only path allowed to use release

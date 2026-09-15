@@ -74,7 +74,7 @@ test("artifact verification checks both size and SHA-256", async () => {
         arca_sdk: { repository: "makekosmos/arca-sdk", commit: "3333333333333333333333333333333333333333", package: { name: "@makekosmos/ark", version: "1.0.0", integrity: "git:3333333333333333333333333333333333333333" } },
         imago: { repository: "makekosmos/imago", commit: "4444444444444444444444444444444444444444", package: { name: "@makekosmos/visuals", version: "1.0.0", integrity: "git:4444444444444444444444444444444444444444" } },
         store: { repository: "makekosmos/store", commit: "6666666666666666666666666666666666666666" },
-        toolchain: { bun: "1.0.0", node: "1.0.0", rust: "1.0.0", target: "x86_64-pc-windows-msvc" },
+        toolchain: { pnpm: "12.4.1", node: "1.0.0", rust: "1.0.0", target: "x86_64-pc-windows-msvc" },
       },
       compatibility: { shell_api: "1.0.0", engine_api: "1.0.0", package_schema: 2 },
       catalog: { sequence: 2, previous_sequence: 1, store_sequence: 1, channel: "test", signing_key_id: "test" },

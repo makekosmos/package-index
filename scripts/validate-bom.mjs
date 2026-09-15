@@ -96,7 +96,7 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
   if (!Number.isSafeInteger(bom.source.core.ark_artifact.size) || bom.source.core.ark_artifact.size <= 0)
     fail("source.core.ark_artifact.size must be a positive safe integer");
   if (!object(bom.source.toolchain)) fail("source.toolchain is required");
-  for (const name of ["bun", "node", "rust"])
+  for (const name of ["pnpm", "node", "rust"])
     if (!SEMVER.test(requiredString(bom.source.toolchain[name], `source.toolchain.${name}`))) fail(`invalid ${name} toolchain version`);
   requiredString(bom.source.toolchain.target, "source.toolchain.target");
   for (const name of ["arca_sdk", "imago"]) {
