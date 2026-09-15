@@ -10,7 +10,7 @@
   "source": {
     "cortex": {
       "repository": "makekosmos/cortex",
-      "commit": "1230ef051bd9075e78e0d2059f074ff363d41558"
+      "commit": "e6ba296f941aaded0a29e0104c3965f64bac7630"
     },
     "core": {
       "repository": "makekosmos/core",
@@ -162,7 +162,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
+      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
       "entrypoint": "bigfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -181,7 +181,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
+      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
       "entrypoint": "greatfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -200,7 +200,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
+      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
       "entrypoint": "leetcode-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -219,7 +219,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
+      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
       "entrypoint": "codewars-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -238,7 +238,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
+      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
       "entrypoint": "hevy-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -257,7 +257,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
+      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
       "entrypoint": "toggl-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -276,7 +276,7 @@
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
       "repository": "makekosmos/cortex",
-      "ref": "1230ef051bd9075e78e0d2059f074ff363d41558",
+      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
       "entrypoint": "huawei-health-worker.exe",
       "icon": "icon.png",
       "build": {
