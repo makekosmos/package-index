@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "state": "candidate",
-  "id": "kosmos-package-catalog-21",
+  "id": "kosmos-package-catalog-22",
   "release": {
     "version": "0.9.36",
     "channel": "production",
@@ -32,11 +32,11 @@
     },
     "imago": {
       "repository": "makekosmos/imago",
-      "commit": "b1852cab9f8f08ae0b236b7759138d3117f720b8",
+      "commit": "3c933f2a606ff41e61914356af1795bf93e146a1",
       "package": {
         "name": "@makekosmos/visuals",
-        "version": "0.1.3",
-        "integrity": "git:b1852cab9f8f08ae0b236b7759138d3117f720b8"
+        "version": "0.1.4",
+        "integrity": "git:3c933f2a606ff41e61914356af1795bf93e146a1"
       }
     },
     "store": {
@@ -56,8 +56,8 @@
     "package_schema": 2
   },
   "catalog": {
-    "sequence": 21,
-    "previous_sequence": 20,
+    "sequence": 22,
+    "previous_sequence": 21,
     "store_sequence": 16,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
@@ -106,17 +106,17 @@
       "manifest_id": "com.kosmos.agenda",
       "kind": "app",
       "engine_api": ">=1.0.0",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "repository": "makekosmos/agenda",
-      "ref": "56a60e0188375766d0bdd79d673c43e688893570",
-      "release_tag": "v0.2.6",
+      "ref": "46abff4b4b72d7621d8aa22f5f6bf782694ed025",
+      "release_tag": "v0.2.7",
       "entrypoint": "dist/index.html",
       "icon": "icon.png",
       "artifact": {
-        "name": "agenda-0.2.6.kspkg",
-        "url": "https://github.com/makekosmos/agenda/releases/download/v0.2.6/agenda-0.2.6.kspkg",
-        "sha256": "4ce7cfd1ee6bbc1aade8fb937da85c291d92ce93f148f7bd1b6f8c0475dc6c32",
-        "size": 258492
+        "name": "agenda-0.2.7.kspkg",
+        "url": "https://github.com/makekosmos/agenda/releases/download/v0.2.7/agenda-0.2.7.kspkg",
+        "sha256": "4d425849e5ac2b8ab93818ab1aeaa65de9066304a37b1e2d585814dc3539c68c",
+        "size": 771710
       }
     },
     {
