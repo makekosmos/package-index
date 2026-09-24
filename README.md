@@ -39,8 +39,8 @@ First-party application versions are maintained in the reviewed
 edits and validates each repository/tag/archive tuple before any signing key is
 materialized.
 
-The workflow builds the standalone crates in
-`packages/{bigfrontend,greatfrontend,leetcode,codewars,hevy,toggl}` on
+The workflow builds the standalone crates in `packages/{provider}` of the
+repository pinned by each `source` package's `repository`/`ref` BOM entry on
 `windows-latest`. It packages each committed `manifest.json`, exact worker
 executable, and `icon.png`, then rejects any artifact that is not the expected
 Windows `source` package with a valid permissions and integration contract.
@@ -94,8 +94,15 @@ Validate the checked-in BOM without signing secrets:
 
 ```text
 node scripts/validate-bom.mjs --bom release/bom.v1.json --sequence 12 --allow-pending-builds
-node scripts/build-source-packages.mjs --bom release/bom.v1.json --cortex <cortex-checkout> --out out --sequence 12 --dry-run
+node scripts/build-source-packages.mjs --bom release/bom.v1.json --out out --sequence 12 --dry-run
 ```
+
+`build-source-packages.mjs` resolves each `source` package's `repository`/`ref`
+from the BOM (which must match a reviewed `source.*` pin such as
+`source.cortex` or `source.integrations`), fetches that exact commit into an
+ephemeral checkout under `--out`, and reads `packages/<provider>` there. For
+local development, `--source-root <checkout>` (or the deprecated `--cortex`
+alias) uses a local checkout instead of fetching.
 
 Production publication takes only `bom_ref`; the Cortex commit is resolved from
 that immutable BOM. The workflow verifies every release tag resolves to the BOM

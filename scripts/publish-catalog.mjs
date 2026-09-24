@@ -2,10 +2,11 @@
 import { createHash, createPublicKey } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { loadBom, validateBom } from "./validate-bom.mjs";
 import { validateCatalog } from "./validate-catalog-input.mjs";
+import * as vendoredZipUtils from "./zip-utils.mjs";
 
 function fail(message) {
   throw new Error(`publication: ${message}`);
@@ -136,7 +137,7 @@ function parseArgs(argv) {
     if (!flag.startsWith("--") || i + 1 >= argv.length || argv[i + 1].startsWith("--")) fail(`missing value for ${flag}`);
     args[flag.slice(2)] = argv[++i];
   }
-  for (const name of ["bom", "previous-catalog", "previous-envelope", "previous-signatures", "artifacts-dir", "source-catalog", "cortex", "sequence", "issued-at", "expires-at", "out"]) {
+  for (const name of ["bom", "previous-catalog", "previous-envelope", "previous-signatures", "artifacts-dir", "source-catalog", "sequence", "issued-at", "expires-at", "out"]) {
     if (!args[name]) fail(`required argument --${name}`);
   }
   return args;
@@ -230,7 +231,7 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   };
 }
 
-export async function preparePublication({ bomPath, previousCatalogPath, previousEnvelopePath, previousSignaturesPath, artifactsDir, sourceCatalogPath, cortexPath, sequence, issuedAt, expiresAt, outDir }) {
+export async function preparePublication({ bomPath, previousCatalogPath, previousEnvelopePath, previousSignaturesPath, artifactsDir, sourceCatalogPath, sequence, issuedAt, expiresAt, outDir }) {
   const bom = await loadBom(bomPath, { expectedSequence: sequence, allowPendingBuilds: true });
   const sourceCatalog = JSON.parse(await readFile(sourceCatalogPath, "utf8"));
   const sourceIds = new Set(bom.packages.filter((entry) => entry.kind === "source").map((entry) => entry.id));
@@ -240,7 +241,7 @@ export async function preparePublication({ bomPath, previousCatalogPath, previou
       sourceCatalog.packages.some((entry) => !sourceIds.has(entry?.manifest?.id))) {
     fail("source package catalog does not match the reviewed BOM");
   }
-  const zipUtils = await import(pathToFileURL(path.join(path.resolve(cortexPath), "desktop", "scripts", "zip-utils.mjs")).href);
+  const zipUtils = vendoredZipUtils;
   const resolvedEntries = [];
   for (const spec of bom.packages) {
     const inspected = await inspectArchive(spec, path.join(path.resolve(artifactsDir), spec.artifact.name), zipUtils, sequence);
@@ -291,7 +292,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     previousSignaturesPath: args["previous-signatures"],
     artifactsDir: args["artifacts-dir"],
     sourceCatalogPath: args["source-catalog"],
-    cortexPath: args.cortex,
     sequence: args.sequence,
     issuedAt: args["issued-at"],
     expiresAt: args["expires-at"],

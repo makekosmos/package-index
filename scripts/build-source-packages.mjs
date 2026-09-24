@@ -3,10 +3,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
 import { loadBom } from "./validate-bom.mjs";
-
-let zipUtils;
+import { readZip, writeZip } from "./zip-utils.mjs";
 
 function fail(message) {
   throw new Error(message);
@@ -25,9 +23,12 @@ function parseArgs(argv) {
     }
     args[flag.slice(2)] = argv[++i];
   }
-  for (const name of ["bom", "cortex", "out", "sequence"]) {
+  for (const name of ["bom", "out", "sequence"]) {
     if (!args[name]) fail(`required argument --${name}`);
   }
+  // --source-root points at a local checkout for development; --cortex is a
+  // deprecated alias kept for the existing publication workflow.
+  args.sourceRoot = args["source-root"] ?? args.cortex;
   return args;
 }
 
@@ -107,6 +108,55 @@ async function requiredFile(file, label) {
   if (!info?.isFile() || info.size === 0) fail(`${label} is missing or empty: ${file}`);
 }
 
+// Strip repo-targeting GIT_* variables leaked by enclosing git hooks so the
+// ephemeral checkout never operates on the caller's repository.
+function gitEnv() {
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+  for (const key of Object.keys(env)) {
+    if (/^GIT_(?:DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|QUARANTINE_PATH|NAMESPACE|PREFIX)$/.test(key)) delete env[key];
+  }
+  return env;
+}
+
+function git(args, cwd, label) {
+  const result = spawnSync(process.env.GIT ?? "git", args, {
+    cwd,
+    stdio: "inherit",
+    windowsHide: true,
+    env: gitEnv(),
+  });
+  if (result.error) fail(`${label}: ${result.error.message}`);
+  if (result.status !== 0) fail(`${label}: git ${args[0]} failed`);
+}
+
+function gitHead(dir) {
+  const result = spawnSync(process.env.GIT ?? "git", ["-C", dir, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+    windowsHide: true,
+    env: gitEnv(),
+  });
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
+// Fetch the BOM-pinned repository/ref into an ephemeral checkout under --out.
+// Source authentication is ambient (credential helpers, `gh auth setup-git`);
+// KOSMOS_SOURCE_GIT_BASE may redirect the github.com base for tests/mirrors.
+async function sourceCheckout(spec, out) {
+  const key = `${spec.repository.replaceAll("/", "-")}-${spec.ref}`;
+  const dir = path.join(out, "source-checkouts", key);
+  if (gitHead(dir) === spec.ref) return dir;
+  await rm(dir, { recursive: true, force: true });
+  await mkdir(dir, { recursive: true });
+  const base = process.env.KOSMOS_SOURCE_GIT_BASE ?? "https://github.com";
+  const url = `${base}/${spec.repository}.git`;
+  git(["init", "-q"], dir, spec.id);
+  git(["remote", "add", "origin", url], dir, spec.id);
+  git(["fetch", "-q", "--depth", "1", "origin", spec.ref], dir, spec.id);
+  git(["checkout", "-q", "--detach", "FETCH_HEAD"], dir, spec.id);
+  if (gitHead(dir) !== spec.ref) fail(`${spec.id}: checkout did not resolve to pinned ref ${spec.ref}`);
+  return dir;
+}
+
 function runCargo(cargoToml, binary, targetDir, target) {
   const result = spawnSync(process.env.CARGO ?? "cargo", [
     "build",
@@ -128,9 +178,9 @@ function archiveEntryNames(entries) {
   return entries.filter((entry) => !entry.isDir).map((entry) => entry.name).sort();
 }
 
-async function buildProvider(spec, cortex, out, sequence, dryRun) {
+async function buildProvider(spec, sourceRoot, out, sequence, dryRun) {
   const provider = spec.build.provider;
-  const packageDir = path.join(cortex, "packages", provider);
+  const packageDir = path.join(sourceRoot, "packages", provider);
   const manifestPath = path.join(packageDir, "manifest.json");
   const manifestBytes = await readFile(manifestPath).catch(() => fail(`${provider}: committed manifest is missing`));
   const manifest = JSON.parse(manifestBytes);
@@ -154,8 +204,8 @@ async function buildProvider(spec, cortex, out, sequence, dryRun) {
   ];
   const archiveName = spec.artifact.name;
   const archive = path.join(out, archiveName);
-  zipUtils.writeZip(archive, archiveBytes);
-  const entries = zipUtils.readZip(archive);
+  writeZip(archive, archiveBytes);
+  const entries = readZip(archive);
   const expectedNames = ["icon.png", "manifest.json", manifest.entrypoint].sort();
   if (JSON.stringify(archiveEntryNames(entries)) !== JSON.stringify(expectedNames)) fail(`${provider}: archive must contain only manifest, exact worker, and icon.png`);
   const bytes = await readFile(archive);
@@ -169,13 +219,14 @@ async function buildProvider(spec, cortex, out, sequence, dryRun) {
 
 try {
   const args = parseArgs(process.argv);
-  const cortex = path.resolve(args.cortex);
   const out = path.resolve(args.out);
-  zipUtils = await import(pathToFileURL(path.join(cortex, "desktop", "scripts", "zip-utils.mjs")).href);
   const bom = await loadBom(args.bom, { expectedSequence: args.sequence, allowPendingBuilds: true });
   const sourceSpecs = bom.packages.filter((spec) => spec.kind === "source");
   const packages = [];
-  for (const spec of sourceSpecs) packages.push(await buildProvider(spec, cortex, out, args.sequence, args.dryRun));
+  for (const spec of sourceSpecs) {
+    const sourceRoot = args.sourceRoot ? path.resolve(args.sourceRoot) : await sourceCheckout(spec, out);
+    packages.push(await buildProvider(spec, sourceRoot, out, args.sequence, args.dryRun));
+  }
   if (!args.dryRun) {
     await writeFile(path.join(out, "source-packages.json"), `${JSON.stringify({ schema_version: 1, bom_id: bom.id, packages }, null, 2)}\n`);
   }

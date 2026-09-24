@@ -87,6 +87,13 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
     "source.imago.commit": bom.source.imago?.commit,
     "source.store.commit": bom.source.store?.commit,
   })) immutableSha(value, label);
+  if (bom.source.integrations !== undefined) {
+    const integrations = bom.source.integrations;
+    if (!object(integrations)) fail("source.integrations must be an object");
+    requiredString(integrations.repository, "source.integrations.repository");
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(integrations.repository)) fail("source.integrations.repository is invalid");
+    immutableSha(integrations.commit, "source.integrations.commit");
+  }
   if (!object(bom.source.core.ark_artifact)) fail("source.core.ark_artifact is required");
   const arkName = requiredString(bom.source.core.ark_artifact.name, "source.core.ark_artifact.name");
   if (arkName !== (bom.release.platform === "win" ? "ark-core-rpc.exe" : "ark-core-rpc"))
@@ -139,7 +146,12 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
     requiredString(spec.repository, `${id}.repository`);
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(spec.repository)) fail(`${id}: invalid repository`);
     immutableSha(spec.ref, `${id}.ref`);
-    if (spec.kind === "source" && spec.ref !== bom.source.cortex.commit) fail(`${id}: source ref must match source.cortex.commit`);
+    if (spec.kind === "source") {
+      const pins = [bom.source.cortex, bom.source.integrations].filter((pin) => object(pin));
+      if (!pins.some((pin) => spec.repository === pin.repository && spec.ref === pin.commit)) {
+        fail(`${id}: source repository/ref must match a pinned source repository`);
+      }
+    }
     requiredString(spec.entrypoint, `${id}.entrypoint`);
     requiredString(spec.icon, `${id}.icon`);
     if (spec.kind === "app") {
@@ -152,8 +164,12 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
     }
     if (spec.kind === "source") {
       if (!object(spec.build)) fail(`${id}: source build metadata is required`);
-      requiredString(spec.build.provider, `${id}.build.provider`);
-      requiredString(spec.build.target, `${id}.build.target`);
+      if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(requiredString(spec.build.provider, `${id}.build.provider`))) {
+        fail(`${id}: build.provider must be a safe package directory name`);
+      }
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(requiredString(spec.build.target, `${id}.build.target`))) {
+        fail(`${id}: build.target is invalid`);
+      }
       const expectedUrl = `https://github.com/makekosmos/package-index/releases/download/catalog-${bom.catalog.sequence}/${spec.artifact.name}`;
       const expectedTemplate = expectedUrl.replace(String(bom.catalog.sequence), "{sequence}");
       if (bom.state === "candidate" && spec.artifact.url_template !== expectedTemplate)
