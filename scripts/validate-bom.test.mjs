@@ -29,6 +29,33 @@ test("source package builds use committed Cargo locks", () => {
   assert.match(builder, /"--locked"/);
 });
 
+test("builder uses the vendored zip-utils, not a Cortex checkout", () => {
+  assert.match(builder, /"\.\/zip-utils\.mjs"/);
+  assert.doesNotMatch(builder, /desktop[\\/]scripts[\\/]zip-utils/);
+});
+
+test("source packages must match a pinned source repository", async () => {
+  const drifted = JSON.parse(await readFile(bomPath, "utf8"));
+  drifted.packages.find((entry) => entry.kind === "source").ref = "0".repeat(40);
+  assert.throws(() => validateBom(drifted, { allowPendingBuilds: true }), /pinned source repository/);
+
+  const moved = JSON.parse(await readFile(bomPath, "utf8"));
+  moved.source.integrations = { repository: "makekosmos/integrations", commit: "e".repeat(40) };
+  for (const entry of moved.packages.filter((item) => item.kind === "source")) {
+    entry.repository = "makekosmos/integrations";
+    entry.ref = "e".repeat(40);
+  }
+  assert.doesNotThrow(() => validateBom(moved, { allowPendingBuilds: true }));
+
+  const mutable = JSON.parse(await readFile(bomPath, "utf8"));
+  mutable.source.integrations = { repository: "makekosmos/integrations", commit: "main" };
+  assert.throws(() => validateBom(mutable, { allowPendingBuilds: true }), /immutable commit SHA/);
+
+  const traversal = JSON.parse(await readFile(bomPath, "utf8"));
+  traversal.packages.find((entry) => entry.kind === "source").build.provider = "../escape";
+  assert.throws(() => validateBom(traversal, { allowPendingBuilds: true }), /build\.provider/);
+});
+
 test("pending source artifacts are rejected unless explicitly allowed", async () => {
   const bom = JSON.parse(await readFile(bomPath, "utf8"));
   delete bom.packages.find((entry) => entry.kind === "source").artifact.sha256;

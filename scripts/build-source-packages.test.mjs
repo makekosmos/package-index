@@ -1,0 +1,181 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { test } from "node:test";
+
+const builderPath = path.resolve(import.meta.dirname, "build-source-packages.mjs");
+const GIT = process.env.GIT ?? "git";
+
+// Strip repo-targeting GIT_* variables leaked by enclosing git hooks so the
+// fixture repository never operates on the caller's repo. The builder receives
+// the environment verbatim on purpose: it must scrub GIT_* itself.
+function gitEnv(extra = {}) {
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: "0", ...extra };
+  for (const key of Object.keys(env)) {
+    if (/^GIT_(?:DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|QUARANTINE_PATH|NAMESPACE|PREFIX)$/.test(key)) delete env[key];
+  }
+  return env;
+}
+
+function runBuilder(args, env = {}) {
+  return spawnSync(process.execPath, [builderPath, ...args], {
+    encoding: "utf8",
+    windowsHide: true,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...env },
+  });
+}
+
+function git(args, cwd) {
+  const result = spawnSync(GIT, args, { cwd, encoding: "utf8", windowsHide: true, env: gitEnv() });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+}
+
+function manifestFixture() {
+  return {
+    schema_version: 2,
+    id: "com.kosmos.fixture",
+    version: "1.0.0",
+    kind: "source",
+    publisher: "kosmos",
+    entrypoint: "fixture-worker.exe",
+    icon: "icon.png",
+    permissions: [
+      { capability: "network", scopes: ["https://fixture.example/"] },
+      { capability: "ark.write", scopes: ["fixture"] },
+    ],
+    integration: {
+      settings: [{
+        key: "api_key",
+        label: "API key",
+        kind: "secret",
+        required: true,
+        injection: { kind: "header", origins: ["https://fixture.example"] },
+      }],
+      schedule: { interval_seconds: 3600 },
+    },
+    targets: [{ runtime: "worker", os: ["windows"] }],
+  };
+}
+
+function bomFixture(commit) {
+  return {
+    schema_version: 1,
+    state: "candidate",
+    id: "fixture-bom",
+    release: { version: "1.0.0", channel: "test", platform: "win" },
+    source: {
+      cortex: { repository: "makekosmos/fixture-src", commit },
+      core: { repository: "makekosmos/core", commit: "2".repeat(40), ark_artifact: { name: "ark-core-rpc.exe", sha256: "2".repeat(64), size: 1 } },
+      arca_sdk: { repository: "makekosmos/arca-sdk", commit: "3".repeat(40), package: { name: "@makekosmos/ark", version: "1.0.0", integrity: `git:${"3".repeat(40)}` } },
+      imago: { repository: "makekosmos/imago", commit: "4".repeat(40), package: { name: "@makekosmos/visuals", version: "1.0.0", integrity: `git:${"4".repeat(40)}` } },
+      store: { repository: "makekosmos/store", commit: "6".repeat(40) },
+      toolchain: { pnpm: "1.0.0", node: "1.0.0", rust: "1.0.0", target: "x86_64-pc-windows-msvc" },
+    },
+    compatibility: { shell_api: "1.0.0", engine_api: "1.0.0", package_schema: 2 },
+    catalog: { sequence: 2, previous_sequence: 1, store_sequence: 1, channel: "test", signing_key_id: "test" },
+    retired_package_ids: [],
+    packages: [{
+      id: "com.kosmos.fixture",
+      manifest_id: "com.kosmos.fixture",
+      kind: "source",
+      engine_api: ">=1.0.0",
+      version: "1.0.0",
+      repository: "makekosmos/fixture-src",
+      ref: commit,
+      entrypoint: "fixture-worker.exe",
+      icon: "icon.png",
+      build: { provider: "fixture", target: "x86_64-pc-windows-msvc" },
+      artifact: {
+        name: "fixture.kspkg",
+        url_template: "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/fixture.kspkg",
+      },
+    }],
+    artifacts: [],
+  };
+}
+
+async function writePackage(root) {
+  const packageDir = path.join(root, "packages", "fixture");
+  await mkdir(packageDir, { recursive: true });
+  await writeFile(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifestFixture(), null, 2)}\n`);
+  await writeFile(path.join(packageDir, "Cargo.toml"), "[package]\nname = \"fixture-worker\"\nversion = \"1.0.0\"\n");
+  await writeFile(path.join(packageDir, "icon.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+}
+
+test("source packages validate from an explicit local source checkout", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-src-build-"));
+  try {
+    const sourceRoot = path.join(dir, "checkout");
+    await writePackage(sourceRoot);
+    const bomPath = path.join(dir, "bom.json");
+    await writeFile(bomPath, JSON.stringify(bomFixture("f".repeat(40))));
+    const result = runBuilder(["--bom", bomPath, "--source-root", sourceRoot, "--out", path.join(dir, "out"), "--sequence", "2", "--dry-run"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Validated 1 source packages: fixture/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a missing committed manifest fails closed", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-src-build-"));
+  try {
+    const sourceRoot = path.join(dir, "checkout");
+    await mkdir(path.join(sourceRoot, "packages", "fixture"), { recursive: true });
+    const bomPath = path.join(dir, "bom.json");
+    await writeFile(bomPath, JSON.stringify(bomFixture("f".repeat(40))));
+    const result = runBuilder(["--bom", bomPath, "--source-root", sourceRoot, "--out", path.join(dir, "out"), "--sequence", "2", "--dry-run"]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /committed manifest is missing/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the builder fetches the BOM-pinned repository/ref without a checkout arg", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-src-build-"));
+  try {
+    const remote = path.join(dir, "remotes", "makekosmos", "fixture-src.git");
+    await mkdir(remote, { recursive: true });
+    git(["init", "-q"], remote);
+    git(["config", "user.email", "fixture@example.test"], remote);
+    git(["config", "user.name", "fixture"], remote);
+    git(["config", "uploadpack.allowAnySHA1InWant", "true"], remote);
+    git(["remote", "add", "origin", "https://invalid.example/unused.git"], remote);
+    await writePackage(remote);
+    git(["add", "-A"], remote);
+    git(["commit", "-qm", "fixture"], remote);
+    const commit = git(["rev-parse", "HEAD"], remote);
+    const bomPath = path.join(dir, "bom.json");
+    await writeFile(bomPath, JSON.stringify(bomFixture(commit)));
+    const base = path.join(dir, "remotes").replaceAll("\\", "/");
+    // A leaked GIT_DIR (as set by enclosing git hooks) must not retarget the
+    // ephemeral checkout onto the caller's repository.
+    const result = runBuilder(
+      ["--bom", bomPath, "--out", path.join(dir, "out"), "--sequence", "2", "--dry-run"],
+      { KOSMOS_SOURCE_GIT_BASE: base, GIT_DIR: remote },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Validated 1 source packages: fixture/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the deprecated --cortex alias still selects a local checkout", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-src-build-"));
+  try {
+    const sourceRoot = path.join(dir, "cortex");
+    await writePackage(sourceRoot);
+    const bomPath = path.join(dir, "bom.json");
+    await writeFile(bomPath, JSON.stringify(bomFixture("f".repeat(40))));
+    const result = runBuilder(["--bom", bomPath, "--cortex", sourceRoot, "--out", path.join(dir, "out"), "--sequence", "2", "--dry-run"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Validated 1 source packages: fixture/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

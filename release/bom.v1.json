@@ -48,6 +48,10 @@
       "pnpm": "12.4.1",
       "rust": "1.95.0",
       "target": "x86_64-pc-windows-msvc"
+    },
+    "integrations": {
+      "repository": "makekosmos/integrations",
+      "commit": "66f904079bbd8174d6415375270d2d52d2e331c0"
     }
   },
   "compatibility": {
@@ -161,8 +165,8 @@
       "kind": "source",
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
-      "repository": "makekosmos/cortex",
-      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
+      "repository": "makekosmos/integrations",
+      "ref": "66f904079bbd8174d6415375270d2d52d2e331c0",
       "entrypoint": "bigfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -180,8 +184,8 @@
       "kind": "source",
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
-      "repository": "makekosmos/cortex",
-      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
+      "repository": "makekosmos/integrations",
+      "ref": "66f904079bbd8174d6415375270d2d52d2e331c0",
       "entrypoint": "greatfrontend-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -199,8 +203,8 @@
       "kind": "source",
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
-      "repository": "makekosmos/cortex",
-      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
+      "repository": "makekosmos/integrations",
+      "ref": "66f904079bbd8174d6415375270d2d52d2e331c0",
       "entrypoint": "leetcode-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -218,8 +222,8 @@
       "kind": "source",
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
-      "repository": "makekosmos/cortex",
-      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
+      "repository": "makekosmos/integrations",
+      "ref": "66f904079bbd8174d6415375270d2d52d2e331c0",
       "entrypoint": "codewars-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -237,8 +241,8 @@
       "kind": "source",
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
-      "repository": "makekosmos/cortex",
-      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
+      "repository": "makekosmos/integrations",
+      "ref": "66f904079bbd8174d6415375270d2d52d2e331c0",
       "entrypoint": "hevy-worker.exe",
       "icon": "icon.png",
       "build": {
@@ -256,8 +260,8 @@
       "kind": "source",
       "engine_api": ">=1.0.0",
       "version": "0.1.0",
-      "repository": "makekosmos/cortex",
-      "ref": "e6ba296f941aaded0a29e0104c3965f64bac7630",
+      "repository": "makekosmos/integrations",
+      "ref": "66f904079bbd8174d6415375270d2d52d2e331c0",
       "entrypoint": "toggl-worker.exe",
       "icon": "icon.png",
       "build": {

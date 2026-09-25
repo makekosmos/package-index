@@ -9,7 +9,10 @@ const ids = new Set();
 for (const item of bom.packages) {
   if (!item || typeof item.id !== "string" || ids.has(item.id)) throw new Error("release BOM contains duplicate or invalid IDs");
   ids.add(item.id);
-  if (item.kind !== "app") continue;
+  if (item.kind === "source") {
+    if (!/^makekosmos\/[a-z0-9-]+$/.test(item.repository)) throw new Error(`${item.id}: source repository must be an explicit makekosmos repo`);
+    continue;
+  }
   if (!/^makekosmos\/[a-z0-9-]+$/.test(item.repository)) throw new Error(`${item.id}: repository must be an explicit makekosmos repo`);
   if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(item.release_tag)) throw new Error(`${item.id}: release tag must be immutable semver`);
   const archiveName = item.artifact.name;
