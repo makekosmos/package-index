@@ -25,6 +25,12 @@ test("package publication workflow consumes an immutable BOM", () => {
   assert.match(workflow, /--previous-envelope out\/previous\/catalog\.envelope\.json/);
   assert.match(workflow, /--previous-signatures out\/previous\/catalog\.signatures\.json/);
   assert.match(workflow, /git ls-remote --exit-code .*refs\/tags\/catalog-\$CATALOG_SEQUENCE/);
+  // The dispatch-input sequence must be validated before any arithmetic
+  // expansion — $(( )) evaluates the raw value, so an unvalidated input can
+  // execute command substitutions via array subscripts (e.g. x[$(cmd)]).
+  assert.match(workflow, /\[\[ "\$CATALOG_SEQUENCE" =~ \^\[1-9\]\[0-9\]\*\$ \]\]/);
+  assert.ok(workflow.indexOf('[[ "$CATALOG_SEQUENCE" =~ ^[1-9][0-9]*$ ]]') <
+    workflow.indexOf("previous_sequence=$((CATALOG_SEQUENCE - 1))"));
   // Source packages must build from their own BOM-pinned repository/ref
   // (source.cortex or source.integrations) — never from the shared cortex
   // checkout via the deprecated --cortex/--source-root alias.

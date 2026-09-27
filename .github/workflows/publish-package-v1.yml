@@ -65,6 +65,10 @@ jobs:
           [[ "$(git rev-parse HEAD)" == "$BOM_REF" ]]
           [[ -f "$BOM_PATH" ]]
           mkdir -p out/previous
+          # Validate the dispatch input before arithmetic expansion: $(( ))
+          # evaluates the raw value, so an unvalidated sequence could run
+          # command substitutions embedded in array subscripts.
+          [[ "$CATALOG_SEQUENCE" =~ ^[1-9][0-9]*$ ]]
           previous_sequence=$((CATALOG_SEQUENCE - 1))
           [[ "$previous_sequence" =~ ^[1-9][0-9]*$ ]]
           node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds
@@ -111,6 +115,7 @@ jobs:
           [[ "$(git rev-parse HEAD)" == "$BOM_REF" ]]
           [[ "$(git -C cortex rev-parse HEAD)" == "$SOURCE_REF" ]]
           [[ -f "$BOM_PATH" ]]
+          [[ "$CATALOG_SEQUENCE" =~ ^[1-9][0-9]*$ ]]
           node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds --print-downloads > out/bom-downloads.tsv
           node -e 'const fs=require("node:fs"),bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));for(const source of Object.values(bom.source).filter((value)=>value?.repository&&value?.commit))console.log([source.repository,source.commit].join("\t"))' > out/bom-sources.tsv
           [[ -n "${KOSMOS_SOURCE_REPO_TOKEN:-}" ]]
@@ -162,6 +167,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          [[ "$CATALOG_SEQUENCE" =~ ^[1-9][0-9]*$ ]]
           [[ -f "$BOM_RESOLVED" && -f "$CATALOG" ]]
           if gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1; then
             echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2

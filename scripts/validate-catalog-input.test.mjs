@@ -25,6 +25,8 @@ for (const [name, mutate, expected] of [
   ["incompatible Engine API", (c) => {}, /Engine API/],
   ["non-monotonic sequence", (c) => {}, /greater/],
   ["invalid timestamps", (c) => { c.issued_at = "not-a-date"; }, /timestamps/],
+  ["nonexistent calendar date", (c) => { c.issued_at = "2026-02-30T00:00:00Z"; }, /timestamps/],
+  ["nonexistent calendar time", (c) => { c.issued_at = "2026-08-28T25:00:00Z"; }, /timestamps/],
 ]) {
   test(name, () => {
     const c = copy();
