@@ -223,6 +223,18 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
   }
 });
 
+test("a sub-EOCD-length archive fails cleanly instead of crashing", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-archive-"));
+  try {
+    const spec = archiveSpec({ artifact: { name: "tiny.kspkg" } });
+    const tiny = path.join(dir, "tiny.kspkg");
+    await writeFile(tiny, Buffer.from("PK"));
+    await assert.rejects(() => inspectArchive(spec, tiny, { readZip }, 8), /end-of-central-directory/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("Windows-aliased archive names cannot evade executable screening", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "kosmos-alias-"));
   try {

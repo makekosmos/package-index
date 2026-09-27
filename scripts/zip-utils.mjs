@@ -35,7 +35,7 @@ export function readZip(zipPath) {
   const entries = [];
   let offset = cdOffset;
   for (let i = 0; i < cdEntries; i++) {
-    if (buf.readUInt32LE(offset) !== CDFH_SIG) {
+    if (offset + 46 > buf.length || buf.readUInt32LE(offset) !== CDFH_SIG) {
       throw new Error(`zip: bad central dir header at ${offset}`);
     }
     const compMethod = buf.readUInt16LE(offset + 10);
@@ -48,7 +48,7 @@ export function readZip(zipPath) {
     const name = buf.subarray(offset + 46, offset + 46 + nameLen).toString("utf8");
 
     // Прочитать LFH чтобы пропустить его name+extra и добраться до payload'а.
-    if (buf.readUInt32LE(lfhOffset) !== LFH_SIG) {
+    if (lfhOffset + 30 > buf.length || buf.readUInt32LE(lfhOffset) !== LFH_SIG) {
       throw new Error(`zip: bad local header at ${lfhOffset} for ${name}`);
     }
     const lfhMethod = buf.readUInt16LE(lfhOffset + 8);
