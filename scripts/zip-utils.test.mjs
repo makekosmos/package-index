@@ -124,6 +124,68 @@ test("readZip rejects out-of-bounds offsets with clean errors", async () => {
   }
 });
 
+// Append an archive comment (declared by the real EOCD) that embeds a second
+// EOCD-shaped record — a "shadow" directory declaration a signature-only
+// backward scan would stop at instead of the authoritative record.
+async function embedShadowEocd(file, { count, commentLen }) {
+  const bytes = Buffer.from(await readFile(file));
+  const eocd = bytes.length - 22;
+  const fake = Buffer.alloc(22);
+  fake.writeUInt32LE(0x06054b50, 0);
+  fake.writeUInt16LE(count, 10);
+  fake.writeUInt32LE(bytes.readUInt32LE(eocd + 12), 12);
+  fake.writeUInt32LE(bytes.readUInt32LE(eocd + 16), 16);
+  fake.writeUInt16LE(commentLen, 20);
+  const tail = Buffer.concat([fake, Buffer.alloc(commentLen)]);
+  bytes.writeUInt16LE(tail.length, eocd + 20);
+  await writeFile(file, Buffer.concat([bytes, tail]));
+}
+
+test("readZip rejects a shadow EOCD record inside the archive comment", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "zip-utils-"));
+  try {
+    const file = path.join(dir, "shadow.zip");
+    writeZip(file, [{ name: "a.txt", data: "abcd" }, { name: "b.txt", data: "ef" }]);
+    // The embedded record claims a one-entry directory and does not reach
+    // EOF itself — but a scan that stops at the last signature sees it.
+    await embedShadowEocd(file, { count: 1, commentLen: 0 });
+    assert.throws(() => readZip(file), /not a valid zip|end-of-central-directory/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("readZip rejects a second self-consistent EOCD record as ambiguous", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "zip-utils-"));
+  try {
+    const file = path.join(dir, "ambiguous.zip");
+    writeZip(file, [{ name: "a.txt", data: "abcd" }]);
+    // The trailing record's comment reaches EOF too: two records both satisfy
+    // the EOCD shape, so the entry set is ambiguous and must be rejected.
+    await embedShadowEocd(file, { count: 1, commentLen: 8 });
+    assert.throws(() => readZip(file), /ambiguous/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("readZip ignores an EOCD-shaped byte run stored inside an entry", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "zip-utils-"));
+  try {
+    const file = path.join(dir, "nested.zip");
+    const inner = Buffer.alloc(22);
+    inner.writeUInt32LE(0x06054b50, 0);
+    inner.writeUInt16LE(1, 10);
+    // The signature bytes live in entry data, not at a record position — and
+    // the record it would describe does not reach EOF — so the real EOCD
+    // still governs the archive.
+    writeZip(file, [{ name: "a.txt", data: "abc" }, { name: "nested.bin", data: inner }]);
+    assert.deepEqual(readZip(file).map((entry) => entry.name), ["a.txt", "nested.bin"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("readZip bounds inflate output by the declared uncompressed size", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "zip-utils-"));
   try {

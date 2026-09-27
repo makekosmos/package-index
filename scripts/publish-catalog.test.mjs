@@ -254,6 +254,56 @@ test("a sub-EOCD-length archive fails cleanly instead of crashing", async () => 
   }
 });
 
+test("an EOCD signature inside the archive comment cannot shadow entries", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-archive-"));
+  try {
+    const spec = archiveSpec({ artifact: { name: "shadowed.kspkg" } });
+    const file = path.join(dir, "shadowed.kspkg");
+    writeZip(file, [
+      { name: "manifest.json", data: JSON.stringify(completeManifest(spec)) },
+      { name: spec.entrypoint, data: peFixture() },
+      { name: spec.icon, data: Buffer.from("icon") },
+      { name: "evil.exe", data: peFixture() },
+      { name: "../traversal.txt", data: Buffer.from("escape") },
+    ]);
+    const bytes = Buffer.from(await readFile(file));
+    const eocd = bytes.length - 22;
+    // A second EOCD-shaped record inside the real record's comment claims a
+    // three-entry directory: a scan that stops at the last signature sees a
+    // clean archive while resyncing readers extract evil.exe and the
+    // traversal path. The entry set must not depend on the consumer's scan.
+    const fake = Buffer.alloc(22);
+    fake.writeUInt32LE(0x06054b50, 0);
+    fake.writeUInt16LE(3, 10);
+    fake.writeUInt32LE(3 * 46 + "manifest.json".length + spec.entrypoint.length + spec.icon.length, 12);
+    fake.writeUInt32LE(bytes.readUInt32LE(eocd + 16), 16);
+    fake.writeUInt16LE(0, 20);
+    const comment = Buffer.concat([fake, Buffer.alloc(8, 0x20)]);
+    bytes.writeUInt16LE(comment.length, eocd + 20);
+    await writeFile(file, Buffer.concat([bytes, comment]));
+    await assert.rejects(() => inspectArchive(spec, file, { readZip }, 8), /end-of-central-directory/);
+
+    // A trailing record that also reaches EOF leaves two self-consistent
+    // EOCDs — ambiguous, not authoritative for either declaration.
+    const ambiguous = path.join(dir, "ambiguous.kspkg");
+    await writeArchive(ambiguous, spec);
+    const amb = Buffer.from(await readFile(ambiguous));
+    const ambEocd = amb.length - 22;
+    const tail = Buffer.alloc(22);
+    tail.writeUInt32LE(0x06054b50, 0);
+    tail.writeUInt16LE(4, 10);
+    tail.writeUInt32LE(amb.readUInt32LE(ambEocd + 12), 12);
+    tail.writeUInt32LE(amb.readUInt32LE(ambEocd + 16), 16);
+    tail.writeUInt16LE(8, 20);
+    const ambComment = Buffer.concat([tail, Buffer.alloc(8)]);
+    amb.writeUInt16LE(ambComment.length, ambEocd + 20);
+    await writeFile(ambiguous, Buffer.concat([amb, ambComment]));
+    await assert.rejects(() => inspectArchive(archiveSpec({ artifact: { name: "ambiguous.kspkg" } }), ambiguous, { readZip }, 8), /ambiguous/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("Windows-aliased archive names cannot evade executable screening", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "kosmos-alias-"));
   try {

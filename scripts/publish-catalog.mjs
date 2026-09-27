@@ -77,7 +77,17 @@ function zipCentralDirectory(bytes, provider) {
   const start = Math.max(0, bytes.length - 65557);
   let eocd = -1;
   for (let offset = Math.max(0, bytes.length - 22); offset >= start; offset -= 1) {
-    if (bytes.readUInt32LE(offset) === 0x06054b50) { eocd = offset; break; }
+    if (bytes.readUInt32LE(offset) !== 0x06054b50) continue;
+    // Only the last signature is authoritative, and only when its comment
+    // reaches EOF exactly. A signature inside a trailing comment or followed
+    // by junk makes the entry list depend on which record a reader stops at —
+    // entries hidden behind the shadow record would skip screening entirely.
+    if (offset + 22 + bytes.readUInt16LE(offset + 20) !== bytes.length) {
+      if (eocd < 0) fail(`${provider}: ZIP end-of-central-directory is invalid`);
+      continue;
+    }
+    if (eocd >= 0) fail(`${provider}: ZIP end-of-central-directory is ambiguous`);
+    eocd = offset;
   }
   if (eocd < 0) fail(`${provider}: ZIP end-of-central-directory is missing`);
   const count = bytes.readUInt16LE(eocd + 10);
