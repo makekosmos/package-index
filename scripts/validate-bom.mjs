@@ -44,12 +44,28 @@ function rejectSecrets(value) {
   }
 }
 
-// Artifact names land in `out/` and are moved by glob (`--pattern "$archive"`,
-// `out/*.kspkg`): a leading `.` is skipped by the publish glob, and `*`, `?`,
-// `[` make the download pattern match sibling assets — either way the release
-// ends up inconsistent with the catalog that attested the artifact.
+// Artifact names land in `out/` and move by pattern or enumeration
+// (`--pattern "$archive"`, the resolved-BOM asset list): a leading `.` or glob
+// metacharacters (`*`, `?`, `[`) make the download pattern match sibling
+// assets — either way the release ends up inconsistent with the catalog that
+// attested the artifact.
 const PACKAGE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.kspkg$/;
 const RELEASE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+// Entrypoint and icon names become archive member paths — and the source
+// builder resolves them with path.join() inside packages/<provider>/ — so the
+// reviewed BOM must carry the same safe-relative-POSIX contract the archive
+// inspector enforces (no traversal, separators, drives, or Windows aliases).
+const SOURCE_ENTRYPOINT = /^[A-Za-z0-9][A-Za-z0-9._-]*\.exe$/i;
+function safePackagePath(value, label) {
+  if (value.includes("\\") || value.includes("\0") || value.startsWith("/") || value.includes(":")) {
+    fail(`${label} must be a safe relative POSIX path`);
+  }
+  if (value.split("/").some((part) => !part || part === "." || part === ".." || /[. ]$/.test(part) ||
+      /^(?:con|prn|aux|nul|clock\$|conin\$|conout\$|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(part))) {
+    fail(`${label} contains an unsafe path component`);
+  }
+}
 
 function artifact(spec, { allowPendingBuilds }) {
   if (!object(spec.artifact)) fail(`${spec.id}: artifact is required`);
@@ -140,6 +156,7 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
   if (!Array.isArray(bom.packages) || bom.packages.length === 0) fail("packages must be a non-empty array");
 
   const ids = new Set();
+  const packageArtifactNames = new Set();
   for (const spec of bom.packages) {
     if (!object(spec)) fail("package entries must be objects");
     const id = requiredString(spec.id, "package.id");
@@ -161,6 +178,18 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
     }
     requiredString(spec.entrypoint, `${id}.entrypoint`);
     requiredString(spec.icon, `${id}.icon`);
+    safePackagePath(spec.entrypoint, `${id}.entrypoint`);
+    safePackagePath(spec.icon, `${id}.icon`);
+    // The catalog contract requires app entrypoints under dist/, and the
+    // builder maps a source entrypoint to `cargo --bin` output `<name>.exe` —
+    // paths that cannot satisfy those contracts must fail here, at review,
+    // instead of mid-publish.
+    if (spec.kind === "app" && !spec.entrypoint.startsWith("dist/")) {
+      fail(`${id}: app entrypoint must be under dist/`);
+    }
+    if (spec.kind === "source" && !SOURCE_ENTRYPOINT.test(spec.entrypoint)) {
+      fail(`${id}: source entrypoint must be a flat *.exe worker name`);
+    }
     if (spec.kind === "app") {
       const releaseTag = requiredString(spec.release_tag, `${id}.release_tag`);
       if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(releaseTag)) fail(`${id}: release_tag must be an immutable semver tag`);
@@ -184,7 +213,11 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
       if (bom.state === "resolved" && spec.artifact.url !== expectedUrl)
         fail(`${id}: resolved source artifact URL is invalid`);
     }
-    artifact(spec, { allowPendingBuilds });
+    const { name: artifactName } = artifact(spec, { allowPendingBuilds });
+    // Package artifacts all land in `out/` and ship under their bare names:
+    // a shared name makes one download overwrite the other before inspection.
+    if (packageArtifactNames.has(artifactName)) fail(`${id}: duplicate artifact name ${artifactName}`);
+    packageArtifactNames.add(artifactName);
   }
   const retired = new Set(bom.retired_package_ids);
   if ([...ids].some((id) => retired.has(id))) fail("retired package IDs must not be active package IDs");
@@ -194,6 +227,7 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
     if (!object(output)) fail("artifact entries must be objects");
     const name = requiredString(output.name, "artifact.name");
     if (!RELEASE_ARTIFACT_NAME.test(name) || artifactNames.has(name)) fail("artifact names must be unique portable basenames");
+    if (packageArtifactNames.has(name)) fail(`${name}: declared artifact collides with a package artifact`);
     artifactNames.add(name);
     if (!SHA256.test(requiredString(output.sha256, `${name}.sha256`))) fail(`${name}: invalid SHA-256`);
     if (!Number.isSafeInteger(output.size) || output.size <= 0) fail(`${name}: invalid size`);

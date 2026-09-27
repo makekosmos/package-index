@@ -14,6 +14,12 @@ test("package publication workflow consumes an immutable BOM", () => {
   assert.doesNotMatch(workflow, /inputs\.source_ref/);
   assert.match(workflow, /validate-bom\.mjs --bom/);
   assert.match(workflow, /--verify-artifacts --artifacts-dir out/);
+  // Release assets are enumerated from the resolved BOM — never globbed — so
+  // stray .kspkg files cannot ship unattested and declared non-.kspkg
+  // artifacts are not silently dropped.
+  assert.doesNotMatch(workflow, /out\/\*\.kspkg/);
+  assert.match(workflow, /while IFS= read -r asset/);
+  assert.match(workflow, /release_assets\[@\]/);
   assert.match(workflow, /gh release download "catalog-\$previous_sequence"/);
   assert.match(workflow, /release-bom\.v1\.json/);
   assert.match(workflow, /cortex\/Cargo\.lock/);

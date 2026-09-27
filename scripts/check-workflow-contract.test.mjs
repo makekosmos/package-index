@@ -31,6 +31,11 @@ for (const [label, step] of [
   ["anchored key with mutable ref", `      - &a uses: actions/checkout@main\n`],
   ["flow mapping with mutable ref", `      - {uses: actions/checkout@main}\n`],
   ["job-level reusable workflow", `    uses: octo/repo/.github/workflows/ci.yml@main\n`],
+  // A `uses` value with no `@` at all executes an unpinned reference — bare
+  // action names and docker image tags must not slip past the pin check.
+  ["bare action without ref", `      - uses: octo/action\n`],
+  ["docker image without digest", `      - uses: docker://alpine:3.19\n`],
+  ["empty ref", `      - uses: octo/action@\n`],
 ]) {
   test(`rejects ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-contract-"));

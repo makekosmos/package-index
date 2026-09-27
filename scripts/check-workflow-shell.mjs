@@ -12,7 +12,37 @@ const RUN_KEY = /(?:^(\s*(?:-\s+)?(?:[&!*][^\s#]+\s+)*)|[{,]\s*)["']?run["']?\s*
 // chomping/indent indicators and a trailing comment.
 const BLOCK_SCALAR = /^[|>][0-9+-]{0,2}\s*(?:#[^\n]*)?$/;
 const STRICT_MODE = /^[ ]*set -Eeuo pipefail[ ]*$/m;
-const FORCE_DELETE = /\brm\s+-rf\b/;
+
+// Recursive force deletion is the forbidden operation — not one flag spelling.
+// Option clusters fold the flags in any order (`rm -fr`, `rm -Rf`), split them
+// (`rm -r -f`), quote them (`rm "-rf"`), place them after operands
+// (`rm out/ -rf`), or use long options (`rm --recursive --force`).
+// `literal` marks a `|` block scalar, where each line is its own command;
+// `>` and plain scalars fold continuation lines into the same command.
+function isForceRecursiveDelete(text, literal) {
+  const joined = text.replace(/\\\r?\n/g, " ");
+  const commands = literal ? joined.split("\n") : [joined.replace(/[ ]*\n[ ]*/g, " ").replace(/\t/g, " ")];
+  for (const line of commands) {
+    for (const match of line.matchAll(/\brm\b/g)) {
+      const segment = line.slice(match.index).split(/[|&;<>]/, 1)[0];
+      let recursive = false;
+      let force = false;
+      for (const raw of segment.trim().split(/\s+/).slice(1)) {
+        if (raw === "--") break;
+        const token = raw.replace(/^["']+|["']+$/g, "");
+        if (token === "--recursive") { recursive = true; continue; }
+        if (token === "--force") { force = true; continue; }
+        const short = /^-([a-zA-Z]+)$/.exec(token);
+        if (short) {
+          if (/[rR]/.test(short[1])) recursive = true;
+          if (/f/.test(short[1])) force = true;
+        }
+      }
+      if (recursive && force) return true;
+    }
+  }
+  return false;
+}
 
 const root = path.resolve(".github/workflows");
 for (const name of (await readdir(root)).filter((entry) => /\.ya?ml$/.test(entry))) {
@@ -40,7 +70,7 @@ for (const name of (await readdir(root)).filter((entry) => /\.ya?ml$/.test(entry
     if (lineStart && BLOCK_SCALAR.test(value) && !STRICT_MODE.test(text)) {
       throw new Error(`${name}: every multiline shell step must enable strict mode`);
     }
-    if (FORCE_DELETE.test(text)) {
+    if (isForceRecursiveDelete(text, BLOCK_SCALAR.test(value) && value.startsWith("|"))) {
       throw new Error(`${name}: recursive force deletion is forbidden in publication workflows`);
     }
   }

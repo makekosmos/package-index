@@ -57,10 +57,11 @@ test("source packages must match a pinned source repository", async () => {
 });
 
 test("artifact names cannot evade the publish glob or download pattern", async () => {
-  // Artifact names land in `out/` and are moved by glob: `out/*.kspkg` skips
-  // dotfiles and `gh release download --pattern` treats `*`/`?`/`[` as
-  // wildcards — such names would publish a release inconsistent with the
-  // catalog, or pull uninspected sibling assets into it.
+  // Artifact names land in `out/` and move by pattern/enumeration:
+  // `gh release download --pattern` treats `*`/`?`/`[` as wildcards and a
+  // leading `.` is not a portable basename — such names would publish a
+  // release inconsistent with the catalog, or pull uninspected sibling
+  // assets into it.
   for (const bad of [".hidden.kspkg", "..x.kspkg", "all*.kspkg", "x?.kspkg", "list[0].kspkg", "my file.kspkg", "-x.kspkg"]) {
     const bom = JSON.parse(await readFile(bomPath, "utf8"));
     bom.packages[0].artifact.name = bad;
@@ -100,6 +101,39 @@ test("duplicate IDs and mutable refs fail closed", async () => {
   const declarative = JSON.parse(await readFile(bomPath, "utf8"));
   declarative.metadata = { secret_setting: "session" };
   assert.doesNotThrow(() => validateBom(declarative, { allowPendingBuilds: true }));
+});
+
+test("entrypoint and icon must satisfy the archive path contract", async () => {
+  // The source builder resolves icon/entrypoint under packages/<provider>/
+  // with path.join and publishes them as archive members — traversal or
+  // unsafe components must fail at review, not mid-publish.
+  for (const bad of ["../escape.txt", "../../outside", "a/../icon.png", "/abs/icon.png", "C:/icon.png", "a\\icon.png", "sub//icon.png", "icon.png.", "icon.png ", "con.png"]) {
+    const bom = JSON.parse(await readFile(bomPath, "utf8"));
+    bom.packages.find((entry) => entry.kind === "source").icon = bad;
+    assert.throws(() => validateBom(bom, { allowPendingBuilds: true }), /icon.*safe relative POSIX path|icon.*unsafe path component/, bad);
+  }
+  // An app entrypoint outside dist/ can never satisfy the catalog manifest
+  // contract; a source entrypoint that is not a flat *.exe name can never be
+  // produced by the `cargo --bin` build the workflow runs.
+  const app = JSON.parse(await readFile(bomPath, "utf8"));
+  app.packages.find((entry) => entry.kind === "app").entrypoint = "evil.exe";
+  assert.throws(() => validateBom(app, { allowPendingBuilds: true }), /entrypoint must be under dist\//);
+  for (const bad of ["worker", "sub/dir.exe", "worker.dll", "../w.exe"]) {
+    const bom = JSON.parse(await readFile(bomPath, "utf8"));
+    bom.packages.find((entry) => entry.kind === "source").entrypoint = bad;
+    assert.throws(() => validateBom(bom, { allowPendingBuilds: true }), /entrypoint/, bad);
+  }
+});
+
+test("package artifact names must be unique and disjoint from declared artifacts", async () => {
+  const bom = JSON.parse(await readFile(bomPath, "utf8"));
+  bom.packages[1].artifact.name = bom.packages[0].artifact.name;
+  bom.packages[1].artifact.url = `https://github.com/makekosmos/dictation/releases/download/v0.2.5/${bom.packages[0].artifact.name}`;
+  assert.throws(() => validateBom(bom, { allowPendingBuilds: true }), /duplicate artifact name/);
+
+  const colliding = JSON.parse(await readFile(bomPath, "utf8"));
+  colliding.artifacts.push({ name: colliding.packages[0].artifact.name, sha256: "a".repeat(64), size: 1 });
+  assert.throws(() => validateBom(colliding, { allowPendingBuilds: true }), /collides with a package artifact/);
 });
 
 test("artifact verification checks both size and SHA-256", async () => {
