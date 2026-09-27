@@ -25,36 +25,54 @@ const STRICT_MODE = /^[ ]*set -Eeuo pipefail[ ]*$/m;
 // --fo` and even `rm --r --f` execute --recursive --force. Tokens are resolved
 // the same way before flag parsing; expansion-bearing spellings (`-$VAR`,
 // `-$()` substitutions) cannot be screened statically and are rejected as
-// unverifiable rather than trusted.
+// unverifiable rather than trusted. The command word resolves the same way —
+// `r"m"`, `r'm'`, `r\m`, and `r$'m'` all exec rm — so each line is also
+// scanned with quotes and escapes folded.
 function unquoteToken(raw) {
-  return raw.replace(/\\(.)/g, "$1").replace(/["']/g, "");
+  return raw.replace(/\$(?=["'])/g, "").replace(/\\(.)/g, "$1").replace(/["']/g, "");
 }
 
 function isForceRecursiveDelete(text, literal) {
-  const joined = text.replace(/\\\r?\n/g, " ");
-  const commands = literal ? joined.split("\n") : [joined.replace(/[ ]*\n[ ]*/g, " ").replace(/\t/g, " ")];
+  let commands;
+  if (literal) {
+    // YAML strips the block scalar's common indent before the shell sees the
+    // text, and a `\<newline>` continuation then merges the next line's
+    // stripped content: `rm -r\<newline>f` reaches rm as `rm -rf`. Folding to
+    // whitespace — or keeping the indent — splits the flag cluster.
+    const raw = text.split("\n");
+    const indent = (raw.slice(1).find((line) => line.trim() !== "") ?? "").match(/^ */)[0].length;
+    commands = raw
+      .map((line, index) => (index === 0 ? line : line.slice(Math.min(indent, line.match(/^ */)[0].length))))
+      .join("\n")
+      .replace(/\\\r?\n/g, "")
+      .split("\n");
+  } else {
+    commands = [text.replace(/\\\r?\n/g, " ").replace(/[ ]*\n[ ]*/g, " ").replace(/\t/g, " ")];
+  }
   for (const line of commands) {
-    for (const match of line.matchAll(/\brm\b/g)) {
-      const segment = line.slice(match.index).split(/[|&;<>]/, 1)[0];
-      let recursive = false;
-      let force = false;
-      for (const raw of segment.trim().split(/\s+/).slice(1)) {
-        const token = unquoteToken(raw);
-        if (token === "--") break;
-        if (/^-.*[$`\\]/.test(token)) return true;
-        if (token.startsWith("--")) {
-          const word = token.slice(2);
-          if (word && "recursive".startsWith(word)) recursive = true;
-          if (word && "force".startsWith(word)) force = true;
-          continue;
+    for (const command of new Set([line, unquoteToken(line)])) {
+      for (const match of command.matchAll(/\brm\b/g)) {
+        const segment = command.slice(match.index).split(/[|&;<>]/, 1)[0];
+        let recursive = false;
+        let force = false;
+        for (const raw of segment.trim().split(/\s+/).slice(1)) {
+          const token = unquoteToken(raw);
+          if (token === "--") break;
+          if (/^-.*[$`\\]/.test(token)) return true;
+          if (token.startsWith("--")) {
+            const word = token.slice(2);
+            if (word && "recursive".startsWith(word)) recursive = true;
+            if (word && "force".startsWith(word)) force = true;
+            continue;
+          }
+          const short = /^-([a-zA-Z]+)$/.exec(token);
+          if (short) {
+            if (/[rR]/.test(short[1])) recursive = true;
+            if (/f/.test(short[1])) force = true;
+          }
         }
-        const short = /^-([a-zA-Z]+)$/.exec(token);
-        if (short) {
-          if (/[rR]/.test(short[1])) recursive = true;
-          if (/f/.test(short[1])) force = true;
-        }
+        if (recursive && force) return true;
       }
-      if (recursive && force) return true;
     }
   }
   return false;

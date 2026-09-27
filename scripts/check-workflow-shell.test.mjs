@@ -49,6 +49,20 @@ for (const [label, step] of [
   ["quoted cluster", "      - run: |\n          set -Eeuo pipefail\n          rm \"-rf\" \"$RUNNER_TEMP\"\n"],
   ["operand before flags", "      - run: |\n          set -Eeuo pipefail\n          rm \"$RUNNER_TEMP\" -rf\n"],
   ["line continuation", "      - run: |\n          set -Eeuo pipefail\n          rm \\\n            -rf \"$RUNNER_TEMP\"\n"],
+  // A `\<newline>` at the block indent is deleted by the shell, merging the
+  // next line's stripped content: `rm -r\<newline>f` reaches rm as `rm -rf`.
+  // Folding it to whitespace — or leaving the YAML indent in — splits the
+  // flag cluster and hides the operation.
+  ["line continuation inside the flag cluster", "      - run: |\n          set -Eeuo pipefail\n          rm -r\\\n          f \"$RUNNER_TEMP\"\n"],
+  ["line continuation before the cluster", "      - run: |\n          set -Eeuo pipefail\n          rm -\\\n          rf \"$RUNNER_TEMP\"\n"],
+  // The command word resolves quotes and escapes the same way flag tokens do
+  // — `r"m"`, `r'm'`, and `r\m` all exec rm, so a literal `\brm\b` match on
+  // the raw text is not enough.
+  ["double-quoted command word", "      - run: |\n          set -Eeuo pipefail\n          r\"m\" -rf \"$RUNNER_TEMP\"\n"],
+  ["single-quoted command word", "      - run: |\n          set -Eeuo pipefail\n          r'm' -rf \"$RUNNER_TEMP\"\n"],
+  ["escaped command word", "      - run: |\n          set -Eeuo pipefail\n          r\\m -rf \"$RUNNER_TEMP\"\n"],
+  ["ANSI-quoted command word", "      - run: |\n          set -Eeuo pipefail\n          r$'m' -rf \"$RUNNER_TEMP\"\n"],
+  ["quoted command word", "      - run: |\n          set -Eeuo pipefail\n          \"rm\" -rf \"$RUNNER_TEMP\"\n"],
   // Shell resolves quotes and escapes inside a token — `-"rf"`, `-r"f"`, and
   // `-\rf` all reach rm as -rf — and GNU getopt_long accepts unambiguous
   // long-option prefixes, so --rec/--fo and even --r/--f are --recursive
@@ -89,6 +103,10 @@ for (const [label, step] of [
   ["long recursive without force", "      - run: |\n          set -Eeuo pipefail\n          rm --recursive \"$RUNNER_TEMP/dir\"\n"],
   ["end-of-options before -rf", "      - run: |\n          set -Eeuo pipefail\n          rm -- \"$RUNNER_TEMP/-rf\"\n"],
   ["rm without recursive flag sharing a line", "      - run: |\n          set -Eeuo pipefail\n          rm out.txt && echo done\n"],
+  // Indentation beyond the block indent survives as real whitespace in the
+  // shell input, so `rm -r\<newline>  f` is `rm -r` with a `f` operand —
+  // recursive without force, not recursive force deletion.
+  ["continuation line indented past the block", "      - run: |\n          set -Eeuo pipefail\n          rm -r\\\n            f \"$RUNNER_TEMP/file\"\n"],
 ]) {
   test(`accepts ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-shell-"));

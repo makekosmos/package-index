@@ -87,23 +87,37 @@ export function readZip(zipPath) {
 
 function findEOCD(buf) {
   // EOCD расположен в конце файла, comment может быть до 65535 байт.
-  // Ищем signature с конца.
+  // Ищем signature с конца. Авторитетна только последняя запись, чей comment
+  // дотягивает ровно до конца файла: EOCD-сигнатура, зашитая в comment, или
+  // хвостовые байты после записи делают набор entries зависимым от того, на
+  // какой сигнатуре остановится reader, — такой архив отвергаем.
   const minOffset = Math.max(0, buf.length - 65557);
+  let eocd = -1;
   for (let i = buf.length - 22; i >= minOffset; i--) {
-    if (buf.readUInt32LE(i) === EOCD_SIG) {
-      const cdEntries = buf.readUInt16LE(i + 10);
-      const cdSize = buf.readUInt32LE(i + 12);
-      const cdOffset = buf.readUInt32LE(i + 16);
-      // ZIP64 not supported — Package v1 archives remain intentionally small.
-      if (cdEntries === 0xffff || cdOffset === 0xffffffff || cdSize === 0xffffffff) {
-        throw new Error("zip: ZIP64 archives not supported");
-      }
-      return { cdOffset, cdEntries, cdSize };
+    if (buf.readUInt32LE(i) !== EOCD_SIG) continue;
+    if (i + 22 + buf.readUInt16LE(i + 20) !== buf.length) {
+      // Последняя сигнатура, не закрывающая файл, — trailing junk, а не EOCD.
+      // Более ранняя — просто байты внутри comment'а или данных.
+      if (eocd < 0) return null;
+      continue;
     }
+    // Две self-consistent EOCD записи — неоднозначный архив.
+    if (eocd >= 0) throw new Error("zip: ambiguous end-of-central-directory records");
+    eocd = i;
   }
-  // Заглушить unused warning.
-  void ZIP64_EOCD_LOCATOR_SIG;
-  return null;
+  if (eocd < 0) {
+    // Заглушить unused warning.
+    void ZIP64_EOCD_LOCATOR_SIG;
+    return null;
+  }
+  const cdEntries = buf.readUInt16LE(eocd + 10);
+  const cdSize = buf.readUInt32LE(eocd + 12);
+  const cdOffset = buf.readUInt32LE(eocd + 16);
+  // ZIP64 not supported — Package v1 archives remain intentionally small.
+  if (cdEntries === 0xffff || cdOffset === 0xffffffff || cdSize === 0xffffffff) {
+    throw new Error("zip: ZIP64 archives not supported");
+  }
+  return { cdOffset, cdEntries, cdSize };
 }
 
 /**
