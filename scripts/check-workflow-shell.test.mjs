@@ -39,6 +39,16 @@ for (const [label, step] of [
   ["single-line run with forbidden deletion", "      - run: rm -rf \"$RUNNER_TEMP\"\n"],
   ["flow-mapping run with forbidden deletion", "      - {run: rm -rf \"$RUNNER_TEMP\"}\n"],
   ["folded plain scalar hiding forbidden deletion", "      - run: rm\n            -rf \"$RUNNER_TEMP\"\n"],
+  // The forbidden operation is recursive force deletion itself — reordered,
+  // split, quoted, operand-trailing, line-continued, and long-option flag
+  // spellings all perform it and must be caught just like `rm -rf`.
+  ["reordered flags", "      - run: |\n          set -Eeuo pipefail\n          rm -fr \"$RUNNER_TEMP\"\n"],
+  ["uppercase recursive flag", "      - run: |\n          set -Eeuo pipefail\n          rm -Rf \"$RUNNER_TEMP\"\n"],
+  ["split flags", "      - run: |\n          set -Eeuo pipefail\n          rm -r -f \"$RUNNER_TEMP\"\n"],
+  ["long options", "      - run: |\n          set -Eeuo pipefail\n          rm --recursive --force \"$RUNNER_TEMP\"\n"],
+  ["quoted cluster", "      - run: |\n          set -Eeuo pipefail\n          rm \"-rf\" \"$RUNNER_TEMP\"\n"],
+  ["operand before flags", "      - run: |\n          set -Eeuo pipefail\n          rm \"$RUNNER_TEMP\" -rf\n"],
+  ["line continuation", "      - run: |\n          set -Eeuo pipefail\n          rm \\\n            -rf \"$RUNNER_TEMP\"\n"],
 ]) {
   test(`rejects ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-shell-"));
@@ -60,6 +70,10 @@ for (const [label, step] of [
   ["single-line run", "      - run: echo ok\n"],
   ["anchored strict-mode block", "      - &a run: |\n          set -Eeuo pipefail\n          echo ok\n"],
   ["two compliant blocks", "      - run: |\n          set -Eeuo pipefail\n          echo one\n      - run: |\n          set -Eeuo pipefail\n          echo two\n"],
+  // Deletion without the recursive+force combination stays allowed.
+  ["plain rm of a file", "      - run: |\n          set -Eeuo pipefail\n          rm -f \"$RUNNER_TEMP/file\"\n"],
+  ["recursive delete without force", "      - run: |\n          set -Eeuo pipefail\n          rm -r \"$RUNNER_TEMP/dir\"\n"],
+  ["rm without recursive flag sharing a line", "      - run: |\n          set -Eeuo pipefail\n          rm out.txt && echo done\n"],
 ]) {
   test(`accepts ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-shell-"));

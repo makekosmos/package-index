@@ -180,4 +180,10 @@ jobs:
           unset KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY
           node cortex/desktop/scripts/package-sign.mjs --input "$CATALOG" --output "$SIGNATURES" --signer "$BOM_SIGNING_KEY_ID=$KEY_PATH"
           node cortex/desktop/scripts/package-envelope.mjs --catalog "$CATALOG" --signatures "$SIGNATURES" --output "$ENVELOPE"
-          gh release create "catalog-$CATALOG_SEQUENCE" "$CATALOG" "$ENVELOPE" "$SIGNATURES" "$BOM_RESOLVED" out/*.kspkg --repo makekosmos/package-index --target "$BOM_REF" --title "Package catalog $CATALOG_SEQUENCE" --notes "Immutable catalog and release BOM."
+          # Ship exactly the artifact set the resolved BOM attests and
+          # --verify-artifacts hashed: a glob would upload stray .kspkg files
+          # unattested and skip declared non-.kspkg artifacts entirely.
+          release_assets=()
+          while IFS= read -r asset; do release_assets+=("out/$asset"); done < <(node -e 'const fs=require("node:fs"),bom=JSON.parse(fs.readFileSync(process.env.BOM_RESOLVED,"utf8"));for(const spec of bom.packages)console.log(spec.artifact.name);for(const output of bom.artifacts??[])console.log(output.name)')
+          [[ ${#release_assets[@]} -gt 0 ]]
+          gh release create "catalog-$CATALOG_SEQUENCE" "$CATALOG" "$ENVELOPE" "$SIGNATURES" "$BOM_RESOLVED" "${release_assets[@]}" --repo makekosmos/package-index --target "$BOM_REF" --title "Package catalog $CATALOG_SEQUENCE" --notes "Immutable catalog and release BOM."
