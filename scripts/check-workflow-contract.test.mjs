@@ -36,6 +36,13 @@ for (const [label, step] of [
   ["bare action without ref", `      - uses: octo/action\n`],
   ["docker image without digest", `      - uses: docker://alpine:3.19\n`],
   ["empty ref", `      - uses: octo/action@\n`],
+  // The ref may arrive on the NEXT line — `uses:` followed by a deeper
+  // `owner/action@sha` is a folded continuation to YAML and still executes the
+  // referenced action, in block and flow mappings alike.
+  ["mutable ref on the next line", `      - uses:\n          actions/checkout@main\n`],
+  ["comment then mutable ref on the next line", `      - uses: # which checkout\n          actions/checkout@main\n`],
+  ["flow mapping with next-line ref", `      - {uses:\n          actions/checkout@main}\n`],
+  ["job-level ref on the next line", `    uses:\n      octo/repo/.github/workflows/ci.yml@main\n`],
 ]) {
   test(`rejects ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-contract-"));
@@ -56,6 +63,8 @@ for (const [label, step] of [
   ["quoted key, SHA-pinned", `      - "uses": actions/checkout@${SHA}\n`],
   ["flow mapping, SHA-pinned", `      - {uses: actions/checkout@${SHA}, name: x}\n`],
   ["local action without ref", `      - uses: ./.github/actions/local\n`],
+  ["SHA-pinned ref on the next line", `      - uses:\n          actions/checkout@${SHA}\n`],
+  ["local action ref on the next line", `      - uses:\n          ./.github/actions/local\n`],
 ]) {
   test(`accepts ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-contract-"));
