@@ -75,6 +75,30 @@ for (const [label, step] of [
   ["backslash escape in cluster", "      - run: |\n          set -Eeuo pipefail\n          rm -r\\f \"$RUNNER_TEMP\"\n"],
   ["escape before the flag letter", "      - run: |\n          set -Eeuo pipefail\n          rm -\\rf \"$RUNNER_TEMP\"\n"],
   ["unverifiable flag expansion", "      - run: |\n          set -Eeuo pipefail\n          rm -\"$FLAGS\" \"$RUNNER_TEMP\"\n"],
+  // Redirections do not terminate the command — `rm >/dev/null -rf`,
+  // `rm 2>/dev/null -rf`, `rm <<EOF -rf`, and `rm >&2 -rf` all still pass -rf
+  // to rm, so the flag scan must see past each redirection rather than
+  // truncating at the operator.
+  ["output redirect before flags", "      - run: |\n          set -Eeuo pipefail\n          rm >/dev/null -rf \"$RUNNER_TEMP\"\n"],
+  ["fd redirect before flags", "      - run: |\n          set -Eeuo pipefail\n          rm 2>/dev/null -rf \"$RUNNER_TEMP\"\n"],
+  ["input redirect before flags", "      - run: |\n          set -Eeuo pipefail\n          rm </dev/null -rf \"$RUNNER_TEMP\"\n"],
+  ["fd duplication before flags", "      - run: |\n          set -Eeuo pipefail\n          rm 2>&1 -rf \"$RUNNER_TEMP\"\n"],
+  ["merged redirect before flags", "      - run: |\n          set -Eeuo pipefail\n          rm &>/dev/null -rf \"$RUNNER_TEMP\"\n"],
+  ["heredoc redirect before flags", "      - run: |\n          set -Eeuo pipefail\n          rm <<EOF -rf \"$RUNNER_TEMP\"\n          EOF\n"],
+  ["redirect between split flags", "      - run: |\n          set -Eeuo pipefail\n          rm -r 2>/dev/null -f \"$RUNNER_TEMP\"\n"],
+  // `$'...'` ANSI-C quoting resolves escapes — `r$'\x6d'`, `r$'\155'`, and
+  // `r$'\u006d'` all exec rm, and `-$'\x72\x66'` smuggles the flag cluster.
+  ["ANSI hex-escaped command word", "      - run: |\n          set -Eeuo pipefail\n          r$'\\x6d' -rf \"$RUNNER_TEMP\"\n"],
+  ["ANSI octal-escaped command word", "      - run: |\n          set -Eeuo pipefail\n          r$'\\155' -rf \"$RUNNER_TEMP\"\n"],
+  ["ANSI unicode-escaped command word", "      - run: |\n          set -Eeuo pipefail\n          r$'\\u006d' -rf \"$RUNNER_TEMP\"\n"],
+  ["ANSI escape in flag cluster", "      - run: |\n          set -Eeuo pipefail\n          rm -$'\\x72\\x66' \"$RUNNER_TEMP\"\n"],
+  // `run:` may leave its value to a deeper line — `run:` followed by an
+  // indented `|` is still a block scalar to the shell, so the strict-mode
+  // requirement and the literal `\<newline>` continuation semantics both
+  // still apply.
+  ["next-line block scalar without strict mode", "      - run:\n          |\n            rm -f \"$RUNNER_TEMP/file\"\n            echo done\n"],
+  ["next-line block scalar with forbidden deletion", "      - run:\n          |\n            set -Eeuo pipefail\n            rm -rf \"$RUNNER_TEMP\"\n"],
+  ["next-line block scalar continuation cluster", "      - run:\n          |\n            set -Eeuo pipefail\n            rm -r\\\n            f \"$RUNNER_TEMP\"\n"],
 ]) {
   test(`rejects ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-shell-"));
@@ -107,6 +131,10 @@ for (const [label, step] of [
   // shell input, so `rm -r\<newline>  f` is `rm -r` with a `f` operand —
   // recursive without force, not recursive force deletion.
   ["continuation line indented past the block", "      - run: |\n          set -Eeuo pipefail\n          rm -r\\\n            f \"$RUNNER_TEMP/file\"\n"],
+  // A block scalar may also start on the line after `run:` — the same strict
+  // mode and allowed-deletion rules apply to that spelling.
+  ["next-line block scalar with strict mode", "      - run:\n          |\n            set -Eeuo pipefail\n            echo ok\n"],
+  ["allowed deletion through a redirect", "      - run: |\n          set -Eeuo pipefail\n          rm -f out.txt >/dev/null\n"],
 ]) {
   test(`accepts ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-shell-"));

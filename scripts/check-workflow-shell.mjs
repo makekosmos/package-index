@@ -26,11 +26,41 @@ const STRICT_MODE = /^[ ]*set -Eeuo pipefail[ ]*$/m;
 // the same way before flag parsing; expansion-bearing spellings (`-$VAR`,
 // `-$()` substitutions) cannot be screened statically and are rejected as
 // unverifiable rather than trusted. The command word resolves the same way —
-// `r"m"`, `r'm'`, `r\m`, and `r$'m'` all exec rm — so each line is also
-// scanned with quotes and escapes folded.
-function unquoteToken(raw) {
-  return raw.replace(/\$(?=["'])/g, "").replace(/\\(.)/g, "$1").replace(/["']/g, "");
+// `r"m"`, `r'm'`, `r\m`, `r$'m'`, and `r$'\x6d'` all exec rm — so each line is
+// also scanned with quotes and escapes folded.
+const ANSI_C_SIMPLE = { a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" };
+
+// `$'...'` ANSI-C quoting resolves `\xHH`, `\uHHHH`, `\UHHHHHHHH`, `\ooo`
+// octal, `\cX` control, and single-letter escapes statically — decoding them
+// before quote folding keeps `r$'\x6d'` and `-$'\x72\x66'` visible to the
+// scan.
+function decodeAnsiC(body) {
+  return body.replace(/\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|c.|.)/g, (_escape, sequence) => {
+    if (/^[xuU]/.test(sequence)) {
+      const code = parseInt(sequence.slice(1), 16);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : "";
+    }
+    if (/^[0-7]/.test(sequence)) return String.fromCharCode(parseInt(sequence, 8) & 0xff);
+    if (sequence[0] === "c") return String.fromCharCode(sequence.charCodeAt(1) & 0x1f);
+    return ANSI_C_SIMPLE[sequence] ?? sequence;
+  });
 }
+
+function unquoteToken(raw) {
+  return raw
+    .replace(/\$'(?:[^'\\]|\\.)*'?/g, (quoted) => decodeAnsiC(quoted.slice(2, quoted.endsWith("'") ? -1 : undefined)))
+    .replace(/\$(?=["'])/g, "")
+    .replace(/\\(.)/g, "$1")
+    .replace(/["']/g, "");
+}
+
+// `|`/`;`/`&` end a simple command — redirections do not. `rm >/dev/null -rf`,
+// `rm 2>/dev/null -rf`, `rm </dev/null -rf`, `rm >&2 -rf`, `rm &>log -rf`, and
+// `rm <<EOF -rf` all still deliver the flags to rm, so truncating the scan at
+// the first redirect operator hides them. Strip each redirection — optional
+// fd/`{var}`/`&` prefix, the operator, and its target word — before cutting at
+// the real separators.
+const SHELL_REDIRECTION = /(?:\d+|\{[a-zA-Z_][a-zA-Z0-9_]*\}|&)?(?:<<<|<<|<&|<>|>\||&>>|&>|>>|>&|<|>)[ \t]*[^\s|&;]*/g;
 
 function isForceRecursiveDelete(text, literal) {
   let commands;
@@ -52,7 +82,7 @@ function isForceRecursiveDelete(text, literal) {
   for (const line of commands) {
     for (const command of new Set([line, unquoteToken(line)])) {
       for (const match of command.matchAll(/\brm\b/g)) {
-        const segment = command.slice(match.index).split(/[|&;<>]/, 1)[0];
+        const segment = command.slice(match.index).replace(SHELL_REDIRECTION, " ").split(/[|&;]/, 1)[0];
         let recursive = false;
         let force = false;
         for (const raw of segment.trim().split(/\s+/).slice(1)) {
@@ -101,10 +131,32 @@ for (const name of (await readdir(root)).filter((entry) => /\.ya?ml$/.test(entry
       index = line;
     }
     const text = body.join("\n");
-    if (lineStart && BLOCK_SCALAR.test(value) && !STRICT_MODE.test(text)) {
+    // `run:` may hand its value to a deeper line — `run:` followed by an
+    // indented `|` is still a block scalar to the shell, not an empty step:
+    // YAML hands the shell the scalar's literal lines, `\<newline>`
+    // continuations included. Folding those lines as a plain scalar both
+    // hides the strict-mode requirement and splits the continuation merge.
+    let scalar = value;
+    let scalarText = text;
+    if (lineStart && (value.trim() === "" || value.trimStart().startsWith("#"))) {
+      const markerIndex = body.findIndex((bodyLine, bodyIndex) => bodyIndex > 0 && bodyLine.trim() !== "");
+      const marker = markerIndex > 0 ? body[markerIndex].trim() : "";
+      if (BLOCK_SCALAR.test(marker)) {
+        const markerIndent = body[markerIndex].match(/^ */)[0].length;
+        const content = [marker];
+        for (let j = markerIndex + 1; j < body.length; j += 1) {
+          if (body[j].trim() !== "" && body[j].match(/^ */)[0].length <= markerIndent) break;
+          content.push(body[j]);
+        }
+        scalar = marker;
+        scalarText = content.join("\n");
+      }
+    }
+    if (lineStart && BLOCK_SCALAR.test(scalar) && !STRICT_MODE.test(scalarText)) {
       throw new Error(`${name}: every multiline shell step must enable strict mode`);
     }
-    if (isForceRecursiveDelete(text, BLOCK_SCALAR.test(value) && value.startsWith("|"))) {
+    if (isForceRecursiveDelete(scalarText, scalar.startsWith("|") && BLOCK_SCALAR.test(scalar)) ||
+        (scalarText !== text && isForceRecursiveDelete(text, false))) {
       throw new Error(`${name}: recursive force deletion is forbidden in publication workflows`);
     }
   }
