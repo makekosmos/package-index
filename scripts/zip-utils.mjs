@@ -51,8 +51,15 @@ export function readZip(zipPath) {
     if (buf.readUInt32LE(lfhOffset) !== LFH_SIG) {
       throw new Error(`zip: bad local header at ${lfhOffset} for ${name}`);
     }
+    const lfhMethod = buf.readUInt16LE(lfhOffset + 8);
     const lfhNameLen = buf.readUInt16LE(lfhOffset + 26);
     const lfhExtraLen = buf.readUInt16LE(lfhOffset + 28);
+    const lfhName = buf.subarray(lfhOffset + 30, lfhOffset + 30 + lfhNameLen).toString("utf8");
+    // Local and central headers must agree on name and method; otherwise the
+    // bytes behind this entry can be attributed to a different filename.
+    if (lfhMethod !== compMethod || lfhName !== name) {
+      throw new Error(`zip: local header does not match central directory for ${name}`);
+    }
     const dataStart = lfhOffset + 30 + lfhNameLen + lfhExtraLen;
     const rawData = buf.subarray(dataStart, dataStart + compSize);
 
@@ -65,6 +72,9 @@ export function readZip(zipPath) {
       data = zlib.inflateRawSync(rawData);
     } else {
       throw new Error(`zip: unsupported compression method ${compMethod} for ${name}`);
+    }
+    if (data.length !== uncompSize) {
+      throw new Error(`zip: size mismatch for ${name}: declared ${uncompSize}, decoded ${data.length}`);
     }
     entries.push({ name, isDir: name.endsWith("/"), data });
     offset += 46 + nameLen + extraLen + commentLen;

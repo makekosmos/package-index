@@ -199,16 +199,25 @@ export async function loadBom(file, options) {
   return validateBom(bom, options);
 }
 
+async function verifyArtifact(directory, artifact, label) {
+  const file = path.join(directory, artifact.name);
+  const info = await stat(file).catch(() => null);
+  if (!info?.isFile()) fail(`${label}: artifact is missing: ${artifact.name}`);
+  const bytes = await readFile(file);
+  if (bytes.length !== artifact.size) fail(`${label}: artifact size mismatch`);
+  const hash = createHash("sha256").update(bytes).digest("hex");
+  if (hash !== artifact.sha256.toLowerCase()) fail(`${label}: artifact SHA-256 mismatch`);
+}
+
 export async function verifyArtifacts(bom, directory) {
   for (const spec of bom.packages) {
     if (spec.kind === "source" && (spec.artifact.sha256 == null || spec.artifact.size == null)) continue;
-    const file = path.join(directory, spec.artifact.name);
-    const info = await stat(file).catch(() => null);
-    if (!info?.isFile()) fail(`${spec.id}: artifact is missing: ${spec.artifact.name}`);
-    const bytes = await readFile(file);
-    if (bytes.length !== spec.artifact.size) fail(`${spec.id}: artifact size mismatch`);
-    const hash = createHash("sha256").update(bytes).digest("hex");
-    if (hash !== spec.artifact.sha256.toLowerCase()) fail(`${spec.id}: artifact SHA-256 mismatch`);
+    await verifyArtifact(directory, spec.artifact, spec.id);
+  }
+  // Declared release artifacts (bom.artifacts) carry the same name/sha256/size
+  // contract and must be verified too — previously they were silently skipped.
+  for (const output of bom.artifacts ?? []) {
+    await verifyArtifact(directory, output, output.name);
   }
 }
 

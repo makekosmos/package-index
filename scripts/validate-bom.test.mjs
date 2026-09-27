@@ -131,6 +131,16 @@ test("artifact verification checks both size and SHA-256", async () => {
     await verifyArtifacts(bom, directory);
     await writeFile(path.join(directory, "fixture.kspkg"), Buffer.from("tampered"));
     await assert.rejects(() => verifyArtifacts(bom, directory), /artifact size mismatch|artifact SHA-256 mismatch/);
+
+    // Declared release artifacts (bom.artifacts) must be verified too.
+    await writeFile(path.join(directory, "fixture.kspkg"), bytes);
+    const extra = Buffer.from("release sidecar");
+    bom.artifacts.push({ name: "sidecar.bin", sha256: createHash("sha256").update(extra).digest("hex"), size: extra.length });
+    await assert.rejects(() => verifyArtifacts(bom, directory), /artifact is missing: sidecar\.bin/);
+    await writeFile(path.join(directory, "sidecar.bin"), extra);
+    await verifyArtifacts(bom, directory);
+    await writeFile(path.join(directory, "sidecar.bin"), Buffer.from("corrupt sidecar!!"));
+    await assert.rejects(() => verifyArtifacts(bom, directory), /sidecar\.bin: artifact (size|SHA-256) mismatch/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

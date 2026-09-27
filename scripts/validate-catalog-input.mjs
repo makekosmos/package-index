@@ -6,7 +6,23 @@ import { fileURLToPath } from "node:url";
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const SHA256 = /^[0-9a-f]{64}$/i;
-const ISO_UTC = /^\d{4}-\d\d-\d\dT.*Z$/;
+const ISO_UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/;
+
+// Date.parse silently normalizes nonexistent dates (e.g. February 30 rolls
+// into March), so parse components and verify they round-trip exactly.
+function parseIsoUtc(value) {
+  const match = typeof value === "string" ? ISO_UTC.exec(value) : null;
+  if (!match) return null;
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+  const millis = match[7] ? Number(match[7].padEnd(3, "0")) : 0;
+  const time = Date.UTC(year, month - 1, day, hour, minute, second, millis);
+  const date = new Date(time);
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day ||
+      date.getUTCHours() !== hour || date.getUTCMinutes() !== minute || date.getUTCSeconds() !== second) {
+    return null;
+  }
+  return time;
+}
 
 function version(value) {
   const match = String(value ?? "").match(SEMVER);
@@ -44,12 +60,12 @@ export function validateCatalog(catalog, {
   if (previousSequence !== null && (!Number.isSafeInteger(previousSequence) || catalog.sequence <= previousSequence)) {
     throw new Error("catalog sequence must be greater than the previous sequence");
   }
-  if (!ISO_UTC.test(catalog.issued_at || "") || !ISO_UTC.test(catalog.expires_at || "")) {
+  const issued = parseIsoUtc(catalog.issued_at);
+  const expires = parseIsoUtc(catalog.expires_at);
+  if (issued === null || expires === null) {
     throw new Error("catalog timestamps must be ISO UTC");
   }
-  const issued = Date.parse(catalog.issued_at);
-  const expires = Date.parse(catalog.expires_at);
-  if (!Number.isFinite(issued) || !Number.isFinite(expires) || expires <= issued || expires - issued > 366 * 86400000) {
+  if (expires <= issued || expires - issued > 366 * 86400000) {
     throw new Error("catalog validity window is invalid");
   }
   if (!Array.isArray(catalog.packages) || catalog.packages.length === 0) throw new Error("catalog packages must be non-empty");
