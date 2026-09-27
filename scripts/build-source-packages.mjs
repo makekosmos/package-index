@@ -51,6 +51,17 @@ function validateManifest(manifest, spec) {
     fail(`${provider}: invalid source manifest identity`);
   }
   if (!Array.isArray(manifest.permissions)) fail(`${provider}: permissions are required`);
+  // Permission entries are screened per capability below — a duplicate entry
+  // would ship grants the gate never inspected (e.g. a second `network` block
+  // whose scopes skip the HTTPS/origin checks).
+  const capabilities = new Set();
+  for (const item of manifest.permissions) {
+    const capability = object(item) ? item.capability : undefined;
+    if (typeof capability !== "string" || !capability || capabilities.has(capability)) {
+      fail(`${provider}: invalid or duplicate permission capability`);
+    }
+    capabilities.add(capability);
+  }
   const network = manifest.permissions.find((item) => item?.capability === "network");
   const ark = manifest.permissions.find((item) => item?.capability === "ark.write");
   if (!Array.isArray(network?.scopes) || network.scopes.length === 0 || network.scopes.some((scope) => typeof scope !== "string" || !scope.startsWith("https://"))) {
@@ -65,16 +76,21 @@ function validateManifest(manifest, spec) {
       fail(`${provider}: invalid network scope`);
     }
   }));
-  if (!Array.isArray(ark?.scopes) || ark.scopes.length === 0) fail(`${provider}: ark.write permission is required`);
+  if (!Array.isArray(ark?.scopes) || ark.scopes.length === 0 || ark.scopes.some((scope) => typeof scope !== "string" || !scope)) {
+    fail(`${provider}: ark.write permission is required`);
+  }
   const integration = manifest.integration;
   if (!object(integration) || !Array.isArray(integration.settings) || integration.settings.length === 0) {
     fail(`${provider}: integration settings are required`);
   }
   const secretKeys = new Set();
+  const settingKeys = new Set();
   for (const setting of integration.settings) {
     if (!object(setting) || !/^[a-z][a-z0-9_]{0,63}$/.test(setting.key) || typeof setting.label !== "string" || !["text", "secret"].includes(setting.kind) || typeof setting.required !== "boolean") {
       fail(`${provider}: invalid integration setting`);
     }
+    if (settingKeys.has(setting.key)) fail(`${provider}: duplicate integration setting key`);
+    settingKeys.add(setting.key);
     if (setting.kind === "secret") {
       secretKeys.add(setting.key);
       if (!object(setting.injection) || !["basic", "cookies", "header", "json"].includes(setting.injection.kind)) {

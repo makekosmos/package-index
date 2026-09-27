@@ -71,6 +71,9 @@ function safeArchivePath(name, label) {
 }
 
 function zipCentralDirectory(bytes, provider) {
+  // An EOCD record is at least 22 bytes; below that the signature scan would
+  // hit raw Buffer bounds errors instead of a clean rejection.
+  if (bytes.length < 22) fail(`${provider}: ZIP end-of-central-directory is missing`);
   const start = Math.max(0, bytes.length - 65557);
   let eocd = -1;
   for (let offset = Math.max(0, bytes.length - 22); offset >= start; offset -= 1) {

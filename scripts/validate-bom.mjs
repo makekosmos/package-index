@@ -44,10 +44,17 @@ function rejectSecrets(value) {
   }
 }
 
+// Artifact names land in `out/` and are moved by glob (`--pattern "$archive"`,
+// `out/*.kspkg`): a leading `.` is skipped by the publish glob, and `*`, `?`,
+// `[` make the download pattern match sibling assets — either way the release
+// ends up inconsistent with the catalog that attested the artifact.
+const PACKAGE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.kspkg$/;
+const RELEASE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
 function artifact(spec, { allowPendingBuilds }) {
   if (!object(spec.artifact)) fail(`${spec.id}: artifact is required`);
   const name = requiredString(spec.artifact.name, `${spec.id}.artifact.name`);
-  if (path.basename(name) !== name || name.includes("\\") || !name.endsWith(".kspkg")) fail(`${spec.id}: artifact name must be a flat .kspkg basename`);
+  if (!PACKAGE_ARTIFACT_NAME.test(name)) fail(`${spec.id}: artifact name must be a flat .kspkg basename`);
   const url = spec.artifact.url ?? spec.artifact.url_template;
   if (typeof url !== "string" || !url.startsWith("https://")) fail(`${spec.id}: artifact URL must be HTTPS`);
   if (/\/(?:latest|main|master)(?:\/|$)/i.test(url)) fail(`${spec.id}: artifact URL must be immutable`);
@@ -186,7 +193,7 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
   for (const output of bom.artifacts) {
     if (!object(output)) fail("artifact entries must be objects");
     const name = requiredString(output.name, "artifact.name");
-    if (path.basename(name) !== name || artifactNames.has(name)) fail("artifact names must be unique basenames");
+    if (!RELEASE_ARTIFACT_NAME.test(name) || artifactNames.has(name)) fail("artifact names must be unique portable basenames");
     artifactNames.add(name);
     if (!SHA256.test(requiredString(output.sha256, `${name}.sha256`))) fail(`${name}: invalid SHA-256`);
     if (!Number.isSafeInteger(output.size) || output.size <= 0) fail(`${name}: invalid size`);

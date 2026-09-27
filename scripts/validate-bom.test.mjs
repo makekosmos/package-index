@@ -56,6 +56,22 @@ test("source packages must match a pinned source repository", async () => {
   assert.throws(() => validateBom(traversal, { allowPendingBuilds: true }), /build\.provider/);
 });
 
+test("artifact names cannot evade the publish glob or download pattern", async () => {
+  // Artifact names land in `out/` and are moved by glob: `out/*.kspkg` skips
+  // dotfiles and `gh release download --pattern` treats `*`/`?`/`[` as
+  // wildcards — such names would publish a release inconsistent with the
+  // catalog, or pull uninspected sibling assets into it.
+  for (const bad of [".hidden.kspkg", "..x.kspkg", "all*.kspkg", "x?.kspkg", "list[0].kspkg", "my file.kspkg", "-x.kspkg"]) {
+    const bom = JSON.parse(await readFile(bomPath, "utf8"));
+    bom.packages[0].artifact.name = bad;
+    bom.packages[0].artifact.url = `https://github.com/makekosmos/arcadia/releases/download/v0.1.11/${bad}`;
+    assert.throws(() => validateBom(bom, { allowPendingBuilds: true }), /artifact name/, bad);
+  }
+  const bom = JSON.parse(await readFile(bomPath, "utf8"));
+  bom.artifacts.push({ name: ".release-notes.md", sha256: "a".repeat(64), size: 1 });
+  assert.throws(() => validateBom(bom, { allowPendingBuilds: true }), /unique portable basenames/);
+});
+
 test("pending source artifacts are rejected unless explicitly allowed", async () => {
   const bom = JSON.parse(await readFile(bomPath, "utf8"));
   delete bom.packages.find((entry) => entry.kind === "source").artifact.sha256;

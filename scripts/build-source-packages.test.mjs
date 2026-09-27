@@ -120,6 +120,41 @@ test("source packages validate from an explicit local source checkout", async ()
   }
 });
 
+test("duplicate or malformed permission grants fail closed", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-src-build-"));
+  try {
+    for (const [label, mutate, expected] of [
+      // A second `network` entry would carry scopes the per-capability checks
+      // never inspect (non-HTTPS origins, non-URL strings).
+      ["duplicate network capability", (m) => {
+        m.permissions.push({ capability: "network", scopes: ["http://insecure.invalid", "not-a-url"] });
+      }, /duplicate permission capability/],
+      ["non-string ark.write scopes", (m) => {
+        m.permissions.find((p) => p.capability === "ark.write").scopes = [123, null];
+      }, /ark.write permission is required/],
+      ["permission entry without a capability", (m) => {
+        m.permissions.push({ scopes: [] });
+      }, /invalid or duplicate permission capability/],
+      ["duplicate integration setting key", (m) => {
+        m.integration.settings.push({ ...m.integration.settings[0] });
+      }, /duplicate integration setting key/],
+    ]) {
+      const sourceRoot = path.join(dir, `checkout-${label.replaceAll(" ", "-")}`);
+      await writePackage(sourceRoot);
+      const manifest = manifestFixture();
+      mutate(manifest);
+      await writeFile(path.join(sourceRoot, "packages", "fixture", "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+      const bomPath = path.join(dir, "bom.json");
+      await writeFile(bomPath, JSON.stringify(bomFixture("f".repeat(40))));
+      const result = runBuilder(["--bom", bomPath, "--source-root", sourceRoot, "--out", path.join(dir, "out"), "--sequence", "2", "--dry-run"]);
+      assert.notEqual(result.status, 0, `${label} unexpectedly accepted`);
+      assert.match(result.stderr, expected, label);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("a missing committed manifest fails closed", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "kosmos-src-build-"));
   try {

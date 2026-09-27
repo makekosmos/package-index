@@ -69,3 +69,29 @@ test("readZip rejects a central uncompressed size that disagrees with the data",
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("readZip rejects out-of-bounds offsets with clean errors", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "zip-utils-"));
+  try {
+    const file = path.join(dir, "oob.zip");
+    writeZip(file, [{ name: "a.txt", data: Buffer.from("abcd") }]);
+    const bytes = Buffer.from(await readFile(file));
+    // Point the EOCD's central-directory offset far past EOF — must fail with
+    // a zip error, not a raw Buffer bounds exception.
+    const oob = Buffer.from(bytes);
+    oob.writeUInt32LE(0x00ff_ff00, oob.length - 6);
+    await writeFile(file, oob);
+    assert.throws(() => readZip(file), /bad central dir header/);
+    // Point the central entry's local-header offset past EOF.
+    const oobLocal = Buffer.from(bytes);
+    const cd = oobLocal.indexOf(CDFH_SIG);
+    oobLocal.writeUInt32LE(0x00ff_ff00, cd + 42);
+    await writeFile(file, oobLocal);
+    assert.throws(() => readZip(file), /bad local header/);
+    // A buffer smaller than an EOCD record cannot contain one.
+    await writeFile(file, Buffer.from("PK"));
+    assert.throws(() => readZip(file), /not a valid zip/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

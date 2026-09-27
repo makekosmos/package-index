@@ -29,6 +29,16 @@ for (const [label, step] of [
   ["shallow-indented | without strict mode", "    - run: |\n        rm -rf \"$GITHUB_WORKSPACE\"\n        echo done\n"],
   ["strict-mode | with forbidden deletion", "      - run: |\n          set -Eeuo pipefail\n          rm -rf \"$RUNNER_TEMP\"\n"],
   ["| with trailing comment", "      - run: | # cleans outputs\n          set -Eeuo pipefail\n          rm -rf \"$RUNNER_TEMP\"\n"],
+  // Alternative YAML key spellings still execute a shell step — quoted keys,
+  // a space before the colon, node anchors, and flow mappings cannot evade
+  // the gate.
+  ["quoted key block without strict mode", "      - \"run\": |\n          rm -rf \"$GITHUB_WORKSPACE\"\n          echo done\n"],
+  ["spaced key block without strict mode", "      - run : |\n          rm -rf \"$GITHUB_WORKSPACE\"\n          echo done\n"],
+  ["anchored key block without strict mode", "      - &a run: |\n          rm -rf \"$GITHUB_WORKSPACE\"\n          echo done\n"],
+  ["anchored key block with forbidden deletion", "      - &a run: |\n          set -Eeuo pipefail\n          rm -rf \"$RUNNER_TEMP\"\n"],
+  ["single-line run with forbidden deletion", "      - run: rm -rf \"$RUNNER_TEMP\"\n"],
+  ["flow-mapping run with forbidden deletion", "      - {run: rm -rf \"$RUNNER_TEMP\"}\n"],
+  ["folded plain scalar hiding forbidden deletion", "      - run: rm\n            -rf \"$RUNNER_TEMP\"\n"],
 ]) {
   test(`rejects ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-shell-"));
@@ -48,6 +58,7 @@ for (const [label, step] of [
   ["strict-mode | at depth", "      - run: |\n          set -Eeuo pipefail\n          echo ok\n"],
   ["strict-mode |- at depth", "      - run: |-\n          set -Eeuo pipefail\n          echo ok\n"],
   ["single-line run", "      - run: echo ok\n"],
+  ["anchored strict-mode block", "      - &a run: |\n          set -Eeuo pipefail\n          echo ok\n"],
   ["two compliant blocks", "      - run: |\n          set -Eeuo pipefail\n          echo one\n      - run: |\n          set -Eeuo pipefail\n          echo two\n"],
 ]) {
   test(`accepts ${label}`, async () => {
