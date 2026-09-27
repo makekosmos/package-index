@@ -1,0 +1,69 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { test } from "node:test";
+
+const checker = path.resolve(import.meta.dirname, "check-workflow-shell.mjs");
+
+function runChecker(cwd) {
+  return spawnSync(process.execPath, [checker], { cwd, encoding: "utf8", windowsHide: true });
+}
+
+const STEP_PREFIX = `name: t
+on: workflow_dispatch
+permissions: { contents: read }
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+`;
+
+// The gate must catch multiline run blocks in every YAML block-scalar style
+// and at any indentation — not only `run: |` bodies indented ten spaces.
+for (const [label, step] of [
+  ["literal | without strict mode", "      - run: |\n          rm -rf \"$GITHUB_WORKSPACE\"\n          echo done\n"],
+  ["chomping |- without strict mode", "      - run: |-\n          rm -rf \"$GITHUB_WORKSPACE\"\n          echo done\n"],
+  ["folded > without strict mode", "      - run: >\n          rm -rf \"$GITHUB_WORKSPACE\"\n          echo done\n"],
+  ["shallow-indented | without strict mode", "    - run: |\n        rm -rf \"$GITHUB_WORKSPACE\"\n        echo done\n"],
+  ["strict-mode | with forbidden deletion", "      - run: |\n          set -Eeuo pipefail\n          rm -rf \"$RUNNER_TEMP\"\n"],
+  ["| with trailing comment", "      - run: | # cleans outputs\n          set -Eeuo pipefail\n          rm -rf \"$RUNNER_TEMP\"\n"],
+]) {
+  test(`rejects ${label}`, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "wf-shell-"));
+    try {
+      await mkdir(path.join(dir, ".github", "workflows"), { recursive: true });
+      await writeFile(path.join(dir, ".github", "workflows", "t.yml"), STEP_PREFIX + step);
+      const result = runChecker(dir);
+      assert.notEqual(result.status, 0, `${label}: ${result.stderr}`);
+      assert.match(result.stderr, /strict mode|recursive force deletion/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const [label, step] of [
+  ["strict-mode | at depth", "      - run: |\n          set -Eeuo pipefail\n          echo ok\n"],
+  ["strict-mode |- at depth", "      - run: |-\n          set -Eeuo pipefail\n          echo ok\n"],
+  ["single-line run", "      - run: echo ok\n"],
+  ["two compliant blocks", "      - run: |\n          set -Eeuo pipefail\n          echo one\n      - run: |\n          set -Eeuo pipefail\n          echo two\n"],
+]) {
+  test(`accepts ${label}`, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "wf-shell-"));
+    try {
+      await mkdir(path.join(dir, ".github", "workflows"), { recursive: true });
+      await writeFile(path.join(dir, ".github", "workflows", "t.yml"), STEP_PREFIX + step);
+      const result = runChecker(dir);
+      assert.equal(result.status, 0, `${label}: ${result.stderr}`);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test("the repository's own workflows pass", () => {
+  const result = runChecker(path.resolve(import.meta.dirname, ".."));
+  assert.equal(result.status, 0, result.stderr);
+});

@@ -113,13 +113,20 @@ async function requiredFile(file, label) {
   if (!info?.isFile() || info.size === 0) fail(`${label} is missing or empty: ${file}`);
 }
 
-// Strip repo-targeting GIT_* variables leaked by enclosing git hooks so the
-// ephemeral checkout never operates on the caller's repository.
+// Strip every GIT_* variable leaked by an enclosing git hook or caller so the
+// ephemeral checkout is controlled only by the BOM. Repo-targeting variables
+// (GIT_DIR, GIT_INDEX_FILE, ...) can retarget operations onto the caller's
+// repository; config-injection variables (GIT_CONFIG_PARAMETERS,
+// GIT_CONFIG_COUNT/GIT_CONFIG_KEY_*/GIT_CONFIG_VALUE_*, GIT_CONFIG_GLOBAL,
+// GIT_TEMPLATE_DIR, GIT_SSH_COMMAND, ...) can inject init.templateDir hooks or
+// url.insteadOf redirects — executing code inside this build job. Ambient
+// source authentication still applies through the default config files.
 function gitEnv() {
-  const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
-  for (const key of Object.keys(env)) {
-    if (/^GIT_(?:DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|QUARANTINE_PATH|NAMESPACE|PREFIX)$/.test(key)) delete env[key];
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!/^GIT_/.test(key)) env[key] = value;
   }
+  env.GIT_TERMINAL_PROMPT = "0";
   return env;
 }
 
@@ -143,13 +150,25 @@ function gitHead(dir) {
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
+// "" means the working tree is clean; null means there is no usable checkout.
+function gitStatus(dir) {
+  const result = spawnSync(process.env.GIT ?? "git", ["-C", dir, "status", "--porcelain"], {
+    encoding: "utf8",
+    windowsHide: true,
+    env: gitEnv(),
+  });
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
 // Fetch the BOM-pinned repository/ref into an ephemeral checkout under --out.
+// A cached checkout is reused only when it is still clean at the pinned ref —
+// a HEAD match alone would trust a dirty or tampered working tree.
 // Source authentication is ambient (credential helpers, `gh auth setup-git`);
 // KOSMOS_SOURCE_GIT_BASE may redirect the github.com base for tests/mirrors.
 async function sourceCheckout(spec, out) {
-  const key = `${spec.repository.replaceAll("/", "-")}-${spec.ref}`;
+  const key = `${encodeURIComponent(spec.repository)}-${spec.ref}`;
   const dir = path.join(out, "source-checkouts", key);
-  if (gitHead(dir) === spec.ref) return dir;
+  if (gitHead(dir) === spec.ref && gitStatus(dir) === "") return dir;
   await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
   const base = process.env.KOSMOS_SOURCE_GIT_BASE ?? "https://github.com";
@@ -217,14 +236,14 @@ async function buildProvider(spec, sourceRoot, out, sequence, dryRun) {
   const archiveBytes = [
     { name: "manifest.json", data: manifestBytes },
     { name: manifest.entrypoint, data: await readFile(executable) },
-    { name: "icon.png", data: iconBytes },
+    { name: manifest.icon, data: iconBytes },
   ];
   const archiveName = spec.artifact.name;
   const archive = path.join(out, archiveName);
   writeZip(archive, archiveBytes);
   const entries = readZip(archive);
-  const expectedNames = ["icon.png", "manifest.json", manifest.entrypoint].sort();
-  if (JSON.stringify(archiveEntryNames(entries)) !== JSON.stringify(expectedNames)) fail(`${provider}: archive must contain only manifest, exact worker, and icon.png`);
+  const expectedNames = [manifest.icon, "manifest.json", manifest.entrypoint].sort();
+  if (JSON.stringify(archiveEntryNames(entries)) !== JSON.stringify(expectedNames)) fail(`${provider}: archive must contain only manifest, exact worker, and the manifest icon`);
   const bytes = await readFile(archive);
   return {
     manifest,
