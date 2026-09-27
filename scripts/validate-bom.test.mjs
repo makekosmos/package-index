@@ -81,6 +81,26 @@ test("pending source artifacts are rejected unless explicitly allowed", async ()
   assert.doesNotThrow(() => validateBom(bom, { allowPendingBuilds: true }));
 });
 
+test("pending source artifacts still reject malformed declared fields", async () => {
+  // The pending exemption covers absent metadata — a sha256 or size that is
+  // declared must still satisfy the artifact contract.
+  for (const [sha256, size] of [["not-a-sha256", undefined], ["z".repeat(64), undefined], [undefined, "not-a-number"], [undefined, -4], [undefined, 1.5]]) {
+    const bom = JSON.parse(await readFile(bomPath, "utf8"));
+    const artifact = bom.packages.find((entry) => entry.kind === "source").artifact;
+    delete artifact.sha256;
+    delete artifact.size;
+    if (sha256 !== undefined) artifact.sha256 = sha256;
+    if (size !== undefined) artifact.size = size;
+    assert.throws(() => validateBom(bom, { allowPendingBuilds: true }), /SHA-256|size/);
+  }
+  // A declared-but-valid sha256 with size still pending remains allowed.
+  const bom = JSON.parse(await readFile(bomPath, "utf8"));
+  const artifact = bom.packages.find((entry) => entry.kind === "source").artifact;
+  artifact.sha256 = "a".repeat(64);
+  delete artifact.size;
+  assert.doesNotThrow(() => validateBom(bom, { allowPendingBuilds: true }));
+});
+
 test("duplicate IDs and mutable refs fail closed", async () => {
   const bom = JSON.parse(await readFile(bomPath, "utf8"));
   bom.packages[1].id = bom.packages[0].id;

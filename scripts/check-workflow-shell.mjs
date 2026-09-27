@@ -19,6 +19,17 @@ const STRICT_MODE = /^[ ]*set -Eeuo pipefail[ ]*$/m;
 // (`rm out/ -rf`), or use long options (`rm --recursive --force`).
 // `literal` marks a `|` block scalar, where each line is its own command;
 // `>` and plain scalars fold continuation lines into the same command.
+// Shell word semantics apply inside a token, not only at its edges: quote
+// removal and backslash escapes fold `-"rf"`, `-r"f"`, and `-\rf` into `-rf`,
+// and GNU getopt_long accepts any unambiguous long-option prefix — `rm --rec
+// --fo` and even `rm --r --f` execute --recursive --force. Tokens are resolved
+// the same way before flag parsing; expansion-bearing spellings (`-$VAR`,
+// `-$()` substitutions) cannot be screened statically and are rejected as
+// unverifiable rather than trusted.
+function unquoteToken(raw) {
+  return raw.replace(/\\(.)/g, "$1").replace(/["']/g, "");
+}
+
 function isForceRecursiveDelete(text, literal) {
   const joined = text.replace(/\\\r?\n/g, " ");
   const commands = literal ? joined.split("\n") : [joined.replace(/[ ]*\n[ ]*/g, " ").replace(/\t/g, " ")];
@@ -28,10 +39,15 @@ function isForceRecursiveDelete(text, literal) {
       let recursive = false;
       let force = false;
       for (const raw of segment.trim().split(/\s+/).slice(1)) {
-        if (raw === "--") break;
-        const token = raw.replace(/^["']+|["']+$/g, "");
-        if (token === "--recursive") { recursive = true; continue; }
-        if (token === "--force") { force = true; continue; }
+        const token = unquoteToken(raw);
+        if (token === "--") break;
+        if (/^-.*[$`\\]/.test(token)) return true;
+        if (token.startsWith("--")) {
+          const word = token.slice(2);
+          if (word && "recursive".startsWith(word)) recursive = true;
+          if (word && "force".startsWith(word)) force = true;
+          continue;
+        }
         const short = /^-([a-zA-Z]+)$/.exec(token);
         if (short) {
           if (/[rR]/.test(short[1])) recursive = true;

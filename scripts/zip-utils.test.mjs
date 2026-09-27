@@ -3,10 +3,38 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import zlib from "node:zlib";
 import { readZip, writeZip } from "./zip-utils.mjs";
 
 const LFH_SIG = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 const CDFH_SIG = Buffer.from([0x50, 0x4b, 0x01, 0x02]);
+
+// Minimal method-8 (deflate) archive — the local writer only emits stored
+// entries, so inflate-path fixtures are assembled by hand.
+function writeDeflateZip(file, name, payload, declaredUncomp) {
+  const compressed = zlib.deflateRawSync(payload);
+  const nameBuf = Buffer.from(name, "utf8");
+  const lfh = Buffer.alloc(30);
+  lfh.writeUInt32LE(0x04034b50, 0);
+  lfh.writeUInt16LE(8, 8);
+  lfh.writeUInt32LE(compressed.length, 18);
+  lfh.writeUInt32LE(declaredUncomp, 22);
+  lfh.writeUInt16LE(nameBuf.length, 26);
+  const cdStart = lfh.length + nameBuf.length + compressed.length;
+  const cdfh = Buffer.alloc(46);
+  cdfh.writeUInt32LE(0x02014b50, 0);
+  cdfh.writeUInt16LE(8, 10);
+  cdfh.writeUInt32LE(compressed.length, 20);
+  cdfh.writeUInt32LE(declaredUncomp, 24);
+  cdfh.writeUInt16LE(nameBuf.length, 28);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(1, 8);
+  eocd.writeUInt16LE(1, 10);
+  eocd.writeUInt32LE(cdfh.length + nameBuf.length, 12);
+  eocd.writeUInt32LE(cdStart, 16);
+  return writeFile(file, Buffer.concat([lfh, nameBuf, compressed, cdfh, nameBuf, eocd]));
+}
 
 test("readZip round-trips a valid archive", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "zip-utils-"));
@@ -91,6 +119,27 @@ test("readZip rejects out-of-bounds offsets with clean errors", async () => {
     // A buffer smaller than an EOCD record cannot contain one.
     await writeFile(file, Buffer.from("PK"));
     assert.throws(() => readZip(file), /not a valid zip/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("readZip bounds inflate output by the declared uncompressed size", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "zip-utils-"));
+  try {
+    // A correctly-declared deflate entry round-trips.
+    const ok = path.join(dir, "ok-deflate.zip");
+    const payload = Buffer.from("deflate me ".repeat(64));
+    await writeDeflateZip(ok, "a.txt", payload, payload.length);
+    const entries = readZip(ok);
+    assert.equal(entries[0].data.toString("utf8"), payload.toString("utf8"));
+
+    // The central directory under-declares uncompressedSize; the stream
+    // inflates far beyond it. The decode must abort at the declared bound
+    // instead of allocating the real expansion before the length check.
+    const bomb = path.join(dir, "bomb.zip");
+    await writeDeflateZip(bomb, "a.txt", Buffer.alloc(8 * 1024 * 1024, 0x41), 64);
+    assert.throws(() => readZip(bomb));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

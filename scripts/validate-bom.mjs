@@ -75,7 +75,19 @@ function artifact(spec, { allowPendingBuilds }) {
   if (typeof url !== "string" || !url.startsWith("https://")) fail(`${spec.id}: artifact URL must be HTTPS`);
   if (/\/(?:latest|main|master)(?:\/|$)/i.test(url)) fail(`${spec.id}: artifact URL must be immutable`);
   const pending = spec.kind === "source" && spec.build && (spec.artifact.sha256 == null || spec.artifact.size == null);
-  if (pending && allowPendingBuilds) return { name, pending: true };
+  if (pending && allowPendingBuilds) {
+    // A field that is declared is validated even while the build is pending —
+    // the pending exemption covers absent metadata, not malformed metadata.
+    if (spec.artifact.sha256 != null &&
+        (typeof spec.artifact.sha256 !== "string" || !SHA256.test(spec.artifact.sha256))) {
+      fail(`${spec.id}: invalid artifact SHA-256`);
+    }
+    if (spec.artifact.size != null &&
+        (!Number.isSafeInteger(spec.artifact.size) || spec.artifact.size <= 0)) {
+      fail(`${spec.id}: artifact size must be a positive safe integer`);
+    }
+    return { name, pending: true };
+  }
   if (!SHA256.test(requiredString(spec.artifact.sha256, `${spec.id}.artifact.sha256`))) fail(`${spec.id}: invalid artifact SHA-256`);
   if (!Number.isSafeInteger(spec.artifact.size) || spec.artifact.size <= 0) fail(`${spec.id}: artifact size must be a positive safe integer`);
   return { name, pending: false };

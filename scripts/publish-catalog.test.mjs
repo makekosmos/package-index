@@ -223,6 +223,25 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
   }
 });
 
+test("a worker target declaring the package entrypoint is not double-counted", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-archive-"));
+  try {
+    // Source manifests may declare their worker target's entrypoint — the
+    // same file as spec.entrypoint. The expected-file list must dedupe it or
+    // a conforming archive fails the exact-match check.
+    const spec = archiveSpec({
+      artifact: { name: "declared-worker.kspkg" },
+      targets: [{ runtime: "worker", os: ["windows"], entrypoint: "fixture-worker.exe" }],
+    });
+    const file = path.join(dir, "declared-worker.kspkg");
+    await writeArchive(file, spec);
+    const inspected = await inspectArchive(spec, file, { readZip }, 8);
+    assert.equal(inspected.manifest.id, spec.manifest_id);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("a sub-EOCD-length archive fails cleanly instead of crashing", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "kosmos-archive-"));
   try {

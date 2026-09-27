@@ -69,7 +69,10 @@ export function readZip(zipPath) {
     } else if (compMethod === 0) {
       data = Buffer.from(rawData);
     } else if (compMethod === 8) {
-      data = zlib.inflateRawSync(rawData);
+      // The declared size bounds the decode itself, not only the comparison:
+      // an entry whose stream inflates past its central-directory metadata is
+      // rejected before it can exhaust memory.
+      data = zlib.inflateRawSync(rawData, { maxOutputLength: uncompSize });
     } else {
       throw new Error(`zip: unsupported compression method ${compMethod} for ${name}`);
     }

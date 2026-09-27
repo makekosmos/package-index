@@ -221,7 +221,7 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   const licenseEntry = files.find((entry) => /^license(?:[._-].*)?$/i.test(path.posix.basename(entry.name)));
   const compatibilityEntry = files.find((entry) => entry.name === "compatibility.json");
   const provenanceEntry = files.find((entry) => entry.name === "provenance.json");
-  const expected = [
+  const expected = [...new Set([
     "manifest.json",
     spec.entrypoint,
     spec.icon,
@@ -229,7 +229,7 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
     ...(spec.kind === "app" && compatibilityEntry ? [compatibilityEntry.name] : []),
     ...(spec.kind === "app" && provenanceEntry ? [provenanceEntry.name] : []),
     ...workerEntrypoints,
-  ].sort();
+  ])].sort();
   const actual = files.map((entry) => entry.name).sort();
   if (spec.kind === "app" ? (expected.some((name) => !actual.includes(name)) ||
       actual.some((name) => !expected.includes(name) && !name.startsWith("dist/") && !name.startsWith("schemas/"))) :

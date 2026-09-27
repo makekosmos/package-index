@@ -49,6 +49,18 @@ for (const [label, step] of [
   ["quoted cluster", "      - run: |\n          set -Eeuo pipefail\n          rm \"-rf\" \"$RUNNER_TEMP\"\n"],
   ["operand before flags", "      - run: |\n          set -Eeuo pipefail\n          rm \"$RUNNER_TEMP\" -rf\n"],
   ["line continuation", "      - run: |\n          set -Eeuo pipefail\n          rm \\\n            -rf \"$RUNNER_TEMP\"\n"],
+  // Shell resolves quotes and escapes inside a token — `-"rf"`, `-r"f"`, and
+  // `-\rf` all reach rm as -rf — and GNU getopt_long accepts unambiguous
+  // long-option prefixes, so --rec/--fo and even --r/--f are --recursive
+  // --force. Flag tokens built from expansions cannot be screened and are
+  // treated as unverifiable.
+  ["abbreviated long options", "      - run: |\n          set -Eeuo pipefail\n          rm --rec --fo \"$RUNNER_TEMP\"\n"],
+  ["minimal long-option abbreviations", "      - run: |\n          set -Eeuo pipefail\n          rm --r --f \"$RUNNER_TEMP\"\n"],
+  ["interior double quotes", "      - run: |\n          set -Eeuo pipefail\n          rm -\"rf\" \"$RUNNER_TEMP\"\n"],
+  ["quote splitting the cluster", "      - run: |\n          set -Eeuo pipefail\n          rm -r\"f\" \"$RUNNER_TEMP\"\n"],
+  ["backslash escape in cluster", "      - run: |\n          set -Eeuo pipefail\n          rm -r\\f \"$RUNNER_TEMP\"\n"],
+  ["escape before the flag letter", "      - run: |\n          set -Eeuo pipefail\n          rm -\\rf \"$RUNNER_TEMP\"\n"],
+  ["unverifiable flag expansion", "      - run: |\n          set -Eeuo pipefail\n          rm -\"$FLAGS\" \"$RUNNER_TEMP\"\n"],
 ]) {
   test(`rejects ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-shell-"));
@@ -73,6 +85,9 @@ for (const [label, step] of [
   // Deletion without the recursive+force combination stays allowed.
   ["plain rm of a file", "      - run: |\n          set -Eeuo pipefail\n          rm -f \"$RUNNER_TEMP/file\"\n"],
   ["recursive delete without force", "      - run: |\n          set -Eeuo pipefail\n          rm -r \"$RUNNER_TEMP/dir\"\n"],
+  ["long force without recursive", "      - run: |\n          set -Eeuo pipefail\n          rm --force \"$RUNNER_TEMP/file\"\n"],
+  ["long recursive without force", "      - run: |\n          set -Eeuo pipefail\n          rm --recursive \"$RUNNER_TEMP/dir\"\n"],
+  ["end-of-options before -rf", "      - run: |\n          set -Eeuo pipefail\n          rm -- \"$RUNNER_TEMP/-rf\"\n"],
   ["rm without recursive flag sharing a line", "      - run: |\n          set -Eeuo pipefail\n          rm out.txt && echo done\n"],
 ]) {
   test(`accepts ${label}`, async () => {
