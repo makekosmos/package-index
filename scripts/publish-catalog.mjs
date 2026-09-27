@@ -52,14 +52,19 @@ const MAX_ENTRY_BYTES = 100 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 const MAX_COMPRESSION_RATIO = 100;
 
+const EXECUTABLE_ENTRY = /\.(?:exe|dll|sys|scr|com)$/i;
+
 function safeArchivePath(name, label) {
   if (typeof name !== "string" || !name || name.includes("\\") || name.includes("\0") ||
       name.startsWith("/") || /^[A-Za-z]:/.test(name) || name.includes(":")) {
     fail(`${label} must be a safe relative POSIX path`);
   }
   const parts = name.split("/");
-  if (parts.some((part) => !part || part === "." || part === ".." ||
-      /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(part))) {
+  // Windows strips a trailing "." or " " from each component ("x.exe." lands as
+  // "x.exe") and reserves device names including CONIN$/CONOUT$ — such names
+  // alias a different file on the target and cannot be screened here.
+  if (parts.some((part) => !part || part === "." || part === ".." || /[. ]$/.test(part) ||
+      /^(?:con|prn|aux|nul|clock\$|conin\$|conout\$|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(part))) {
     fail(`${label} contains an unsafe Windows path component`);
   }
   return name;
@@ -122,7 +127,7 @@ function zipCentralDirectory(bytes, provider) {
 }
 
 function verifyPePlatform(data, entrypoint, provider) {
-  if (!/\.exe$/i.test(entrypoint)) return;
+  if (!EXECUTABLE_ENTRY.test(entrypoint)) return;
   if (data.length < 64 || data.subarray(0, 2).toString("ascii") !== "MZ") fail(`${provider}: worker is not a PE executable`);
   const peOffset = data.readUInt32LE(0x3c);
   if (peOffset + 6 > data.length || data.readUInt32LE(peOffset) !== 0x00004550 || data.readUInt16LE(peOffset + 4) !== 0x8664) {
@@ -226,7 +231,7 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   if (spec.kind === "app" ? (expected.some((name) => !actual.includes(name)) ||
       actual.some((name) => !expected.includes(name) && !name.startsWith("dist/") && !name.startsWith("schemas/"))) :
       JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${spec.id}: archive contains unexpected files`);
-  if (files.some((entry) => /\.(?:exe|dll|sys|scr|com)$/i.test(entry.name) &&
+  if (files.some((entry) => EXECUTABLE_ENTRY.test(entry.name) &&
       entry.name !== spec.entrypoint && !workerEntrypoints.includes(entry.name))) {
     fail(`${spec.id}: unexpected executable or Windows binary in archive`);
   }

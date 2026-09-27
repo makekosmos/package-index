@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -160,6 +160,85 @@ test("the builder fetches the BOM-pinned repository/ref without a checkout arg",
     );
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Validated 1 source packages: fixture/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("leaked GIT_CONFIG_* injection cannot install hooks into the checkout", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-src-build-"));
+  try {
+    const remote = path.join(dir, "remotes", "makekosmos", "fixture-src.git");
+    await mkdir(remote, { recursive: true });
+    git(["init", "-q"], remote);
+    git(["config", "user.email", "fixture@example.test"], remote);
+    git(["config", "user.name", "fixture"], remote);
+    git(["config", "uploadpack.allowAnySHA1InWant", "true"], remote);
+    await writePackage(remote);
+    git(["add", "-A"], remote);
+    git(["commit", "-qm", "fixture"], remote);
+    const commit = git(["rev-parse", "HEAD"], remote);
+    const bomPath = path.join(dir, "bom.json");
+    await writeFile(bomPath, JSON.stringify(bomFixture(commit)));
+    // init.templateDir copied into the ephemeral checkout would run this
+    // post-checkout hook inside the build job.
+    const hooks = path.join(dir, "template", "hooks");
+    await mkdir(hooks, { recursive: true });
+    const marker = path.join(dir, "pwned.txt");
+    const hook = path.join(hooks, "post-checkout");
+    await writeFile(hook, `#!/bin/sh\ntouch "${marker}"\n`);
+    await chmod(hook, 0o755);
+    const base = path.join(dir, "remotes").replaceAll("\\", "/");
+    const result = runBuilder(
+      ["--bom", bomPath, "--out", path.join(dir, "out"), "--sequence", "2", "--dry-run"],
+      {
+        KOSMOS_SOURCE_GIT_BASE: base,
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "init.templateDir",
+        GIT_CONFIG_VALUE_0: path.join(dir, "template"),
+        GIT_TEMPLATE_DIR: path.join(dir, "template"),
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Validated 1 source packages: fixture/);
+    await assert.rejects(readFile(marker), /ENOENT/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a dirty cached checkout is refetched instead of trusted", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-src-build-"));
+  try {
+    const remote = path.join(dir, "remotes", "makekosmos", "fixture-src.git");
+    await mkdir(remote, { recursive: true });
+    git(["init", "-q"], remote);
+    git(["config", "user.email", "fixture@example.test"], remote);
+    git(["config", "user.name", "fixture"], remote);
+    git(["config", "uploadpack.allowAnySHA1InWant", "true"], remote);
+    await writePackage(remote);
+    git(["add", "-A"], remote);
+    git(["commit", "-qm", "fixture"], remote);
+    const commit = git(["rev-parse", "HEAD"], remote);
+    const bomPath = path.join(dir, "bom.json");
+    await writeFile(bomPath, JSON.stringify(bomFixture(commit)));
+    const base = path.join(dir, "remotes").replaceAll("\\", "/");
+    const out = path.join(dir, "out");
+    const args = ["--bom", bomPath, "--out", out, "--sequence", "2", "--dry-run"];
+    const env = { KOSMOS_SOURCE_GIT_BASE: base };
+    assert.equal(runBuilder(args, env).status, 0);
+    const checkout = path.join(out, "source-checkouts", `${encodeURIComponent("makekosmos/fixture-src")}-${commit}`);
+    // Tamper with the cached working tree: HEAD still matches the pinned ref,
+    // so a HEAD-only reuse check would trust the poisoned manifest.
+    const manifestPath = path.join(checkout, "packages", "fixture", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.permissions[0].scopes = ["https://evil.example/"];
+    manifest.integration.settings[0].injection.origins = ["https://evil.example"];
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const result = runBuilder(args, env);
+    assert.equal(result.status, 0, result.stderr);
+    const restored = JSON.parse(await readFile(manifestPath, "utf8"));
+    assert.deepEqual(restored.permissions[0].scopes, ["https://fixture.example/"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -222,3 +222,61 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("Windows-aliased archive names cannot evade executable screening", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-alias-"));
+  try {
+    // A component ending in "." or " " is stripped by Win32 path normalization:
+    // "evil.exe." and "evil.exe " both materialize as evil.exe, but a naive
+    // /\.exe$/ check skips them — the PE gate and the unexpected-executable
+    // denylist must not let them through.
+    for (const [label, entrypoint] of [
+      ["trailing space", "worker/evil.exe "],
+      ["trailing dot", "worker/evil.exe."],
+      ["reserved device", "worker/CONIN$"],
+    ]) {
+      const spec = archiveSpec({
+        kind: "app",
+        entrypoint: "dist/index.html",
+        build: undefined,
+        artifact: { name: `${label.replace(" ", "-")}.kspkg` },
+        targets: [
+          { runtime: "kosmos-host", os: ["windows"] },
+          { runtime: "worker", os: ["windows"], entrypoint },
+        ],
+      });
+      const file = path.join(dir, `${label.replace(" ", "-")}.kspkg`);
+      writeZip(file, [
+        { name: "dist/", data: Buffer.alloc(0), externalAttributes: 0x10 },
+        { name: "dist/index.html", data: Buffer.from("app") },
+        { name: "icon.png", data: Buffer.from("icon") },
+        { name: "manifest.json", data: JSON.stringify(completeManifest(spec)) },
+        { name: entrypoint, data: Buffer.from("not a PE executable") },
+      ]);
+      await assert.rejects(() => inspectArchive(spec, file, { readZip }, 8), /unsafe|unexpected/i, label);
+    }
+    // A declared worker entrypoint of another executable type is still a PE
+    // image and must be verified, not exempted by the /\.exe$/ gate.
+    const dllSpec = archiveSpec({
+      kind: "app",
+      entrypoint: "dist/index.html",
+      build: undefined,
+      artifact: { name: "dll-worker.kspkg" },
+      targets: [
+        { runtime: "kosmos-host", os: ["windows"] },
+        { runtime: "worker", os: ["windows"], entrypoint: "worker/helper.dll" },
+      ],
+    });
+    const dllFile = path.join(dir, "dll-worker.kspkg");
+    writeZip(dllFile, [
+      { name: "dist/", data: Buffer.alloc(0), externalAttributes: 0x10 },
+      { name: "dist/index.html", data: Buffer.from("app") },
+      { name: "icon.png", data: Buffer.from("icon") },
+      { name: "manifest.json", data: JSON.stringify(completeManifest(dllSpec)) },
+      { name: "worker/helper.dll", data: Buffer.from("not a PE either") },
+    ]);
+    await assert.rejects(() => inspectArchive(dllSpec, dllFile, { readZip }, 8), /PE executable/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
