@@ -135,9 +135,13 @@ jobs:
           # after build-source-packages and publish-catalog.
           node scripts/validate-bom.mjs --bom "$BOM_PATH" --sequence "$CATALOG_SEQUENCE" --allow-pending-builds
           node -e 'const fs=require("node:fs");const bom=JSON.parse(fs.readFileSync(process.env.BOM_PATH,"utf8"));if(bom.source.cortex.commit!==process.env.SOURCE_REF)throw new Error("source_ref does not match BOM Cortex commit");'
-          node scripts/build-source-packages.mjs --bom "$BOM_PATH" --cortex cortex --out out --sequence "$CATALOG_SEQUENCE"
+          # Source packages build from the repository/ref pinned per package in
+          # the BOM (source.cortex / source.integrations), not from the cortex
+          # checkout above. Ambient git auth uses the source-repo token.
+          gh auth setup-git
+          GH_TOKEN="$KOSMOS_SOURCE_REPO_TOKEN" node scripts/build-source-packages.mjs --bom "$BOM_PATH" --out out --sequence "$CATALOG_SEQUENCE"
           export BOM_RESOLVED="$GITHUB_WORKSPACE/out/release-bom.v1.json" CATALOG="$GITHUB_WORKSPACE/out/catalog.json" CATALOG_INPUT="$GITHUB_WORKSPACE/out/catalog.input.json" SIGNATURES="$GITHUB_WORKSPACE/out/catalog.signatures.json" ENVELOPE="$GITHUB_WORKSPACE/out/catalog.envelope.json"
-          node scripts/publish-catalog.mjs --bom "$BOM_PATH" --previous-catalog out/previous/catalog.json --previous-envelope out/previous/catalog.envelope.json --previous-signatures out/previous/catalog.signatures.json --artifacts-dir out --source-catalog out/source-packages.json --cortex cortex --sequence "$CATALOG_SEQUENCE" --issued-at "$CATALOG_ISSUED_AT" --expires-at "$CATALOG_EXPIRES_AT" --out out
+          node scripts/publish-catalog.mjs --bom "$BOM_PATH" --previous-catalog out/previous/catalog.json --previous-envelope out/previous/catalog.envelope.json --previous-signatures out/previous/catalog.signatures.json --artifacts-dir out --source-catalog out/source-packages.json --sequence "$CATALOG_SEQUENCE" --issued-at "$CATALOG_ISSUED_AT" --expires-at "$CATALOG_EXPIRES_AT" --out out
           node scripts/validate-bom.mjs --bom "$BOM_RESOLVED" --sequence "$CATALOG_SEQUENCE" --verify-artifacts --artifacts-dir out
           if gh release view "catalog-$CATALOG_SEQUENCE" --repo makekosmos/package-index >/dev/null 2>&1; then
             echo "catalog-$CATALOG_SEQUENCE already exists; immutable releases cannot be replaced" >&2

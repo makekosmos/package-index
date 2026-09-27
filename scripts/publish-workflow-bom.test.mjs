@@ -25,6 +25,12 @@ test("package publication workflow consumes an immutable BOM", () => {
   assert.match(workflow, /--previous-envelope out\/previous\/catalog\.envelope\.json/);
   assert.match(workflow, /--previous-signatures out\/previous\/catalog\.signatures\.json/);
   assert.match(workflow, /git ls-remote --exit-code .*refs\/tags\/catalog-\$CATALOG_SEQUENCE/);
+  // Source packages must build from their own BOM-pinned repository/ref
+  // (source.cortex or source.integrations) — never from the shared cortex
+  // checkout via the deprecated --cortex/--source-root alias.
+  assert.match(workflow, /gh auth setup-git/);
+  assert.match(workflow, /build-source-packages\.mjs --bom "\$BOM_PATH" --out out/);
+  assert.doesNotMatch(workflow, /--cortex|--source-root/);
   assert.match(workflow, /case "\$tag_status" in/);
   assert.ok(workflow.indexOf("Preflight target release") < workflow.indexOf("secrets.KOSMOS_SOURCE_REPO_TOKEN"));
   assert.ok(workflow.indexOf("secrets.KOSMOS_PACKAGE_RELEASE_PRIVATE_KEY") > workflow.indexOf("Preflight target release"));
