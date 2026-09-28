@@ -153,7 +153,7 @@ jobs:
             exit 1
           fi
           node cortex/desktop/scripts/package-catalog.mjs --input "$CATALOG_INPUT" --output "$CATALOG"
-          rm -f "$CATALOG_INPUT" out/bom-downloads.tsv out/bom-sources.tsv out/store-catalog.json
+          rm -f -- "$CATALOG_INPUT" out/bom-downloads.tsv out/bom-sources.tsv out/store-catalog.json
       - name: Sign and publish the validated catalog
         env:
           GH_TOKEN: ${{ secrets.KOSMOS_RELEASE_REPO_TOKEN }}

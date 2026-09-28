@@ -43,6 +43,10 @@ for (const [label, step] of [
   ["comment then mutable ref on the next line", `      - uses: # which checkout\n          actions/checkout@main\n`],
   ["flow mapping with next-line ref", `      - {uses:\n          actions/checkout@main}\n`],
   ["job-level ref on the next line", `    uses:\n      octo/repo/.github/workflows/ci.yml@main\n`],
+  // Quoting the value does not weaken the pin — `uses: "a/b@main"` is still a
+  // mutable ref once the quotes fold.
+  ["quoted value with mutable ref", `      - uses: "actions/checkout@main"\n`],
+  ["single-quoted value with mutable ref", `      - uses: 'actions/checkout@main'\n`],
 ]) {
   test(`rejects ${label}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "wf-contract-"));
@@ -63,6 +67,10 @@ for (const [label, step] of [
   ["quoted key, SHA-pinned", `      - "uses": actions/checkout@${SHA}\n`],
   ["flow mapping, SHA-pinned", `      - {uses: actions/checkout@${SHA}, name: x}\n`],
   ["local action without ref", `      - uses: ./.github/actions/local\n`],
+  // YAML quoted scalars are the same action — the closing quote must not land
+  // inside the captured ref and break the pin check.
+  ["double-quoted SHA-pinned value", `      - uses: "actions/checkout@${SHA}"\n`],
+  ["single-quoted SHA-pinned value", `      - uses: 'actions/checkout@${SHA}'\n`],
   ["SHA-pinned ref on the next line", `      - uses:\n          actions/checkout@${SHA}\n`],
   ["local action ref on the next line", `      - uses:\n          ./.github/actions/local\n`],
 ]) {

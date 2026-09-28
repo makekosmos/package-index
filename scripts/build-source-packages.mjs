@@ -44,9 +44,13 @@ function validateManifest(manifest, spec) {
     manifest.id !== spec.manifest_id ||
     manifest.version !== spec.version ||
     manifest.kind !== spec.kind ||
+    manifest.engine_api !== spec.engine_api ||
     manifest.publisher !== "kosmos" ||
+    typeof manifest.name !== "string" || !manifest.name ||
     manifest.entrypoint !== spec.entrypoint ||
-    manifest.icon !== spec.icon
+    manifest.icon !== spec.icon ||
+    !object(manifest.data) || !Array.isArray(manifest.data.access) ||
+    !Array.isArray(manifest.data.defines) || !Array.isArray(manifest.data.mappings)
   ) {
     fail(`${provider}: invalid source manifest identity`);
   }
