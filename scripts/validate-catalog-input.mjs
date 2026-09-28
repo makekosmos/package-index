@@ -78,7 +78,28 @@ export function validateCatalog(catalog, {
     ids.add(manifest.id);
     if (!version(manifest.version)) throw new Error(`${prefix}: invalid semver`);
     if (!["app", "source", "bridge"].includes(manifest.kind)) throw new Error(`${prefix}: invalid package kind`);
-    if (manifest.kind === "app" && (typeof manifest.entrypoint !== "string" || !manifest.entrypoint.startsWith("dist/"))) {
+    if (entry.native !== undefined) {
+      // Native app entries: kind app + v2 manifest whose entrypoint is the
+      // exe inside the release zip, plus a signed `native` descriptor that
+      // must agree with the manifest on version and executable.
+      const native = entry.native;
+      if (!native || typeof native !== "object" || Array.isArray(native)) throw new Error(`${prefix}: invalid native descriptor`);
+      if (manifest.kind !== "app") throw new Error(`${prefix}: native entries must be app kind`);
+      if (manifest.entrypoint !== native.executable) throw new Error(`${prefix}: native executable must equal manifest entrypoint`);
+      if (typeof native.executable !== "string" || !/\.exe$/i.test(native.executable) || native.executable.includes("..") || native.executable.includes("\\")) {
+        throw new Error(`${prefix}: native executable must be a safe .exe path`);
+      }
+      if (typeof native.repository !== "string" || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(native.repository)) {
+        throw new Error(`${prefix}: native repository is invalid`);
+      }
+      if (native.release_tag !== `v${manifest.version}`) throw new Error(`${prefix}: native release_tag must equal v<version>`);
+      if (!["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"].includes(native.target)) {
+        throw new Error(`${prefix}: native target is invalid`);
+      }
+      if (!Array.isArray(manifest.targets) || !manifest.targets.some((target) => target?.runtime === "standalone" && Array.isArray(target?.os) && target.os.includes("windows"))) {
+        throw new Error(`${prefix}: native entries require a standalone windows target`);
+      }
+    } else if (manifest.kind === "app" && (typeof manifest.entrypoint !== "string" || !manifest.entrypoint.startsWith("dist/"))) {
       throw new Error(`${prefix}: app entrypoint must be under dist/`);
     }
     const engineRange = manifest.engine_api ?? manifest.engine_api_range;

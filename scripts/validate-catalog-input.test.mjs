@@ -39,6 +39,56 @@ for (const [name, mutate, expected] of [
   });
 }
 
+function nativeEntry() {
+  return {
+    manifest: {
+      schema_version: 2,
+      id: "com.kosmos.agenda",
+      name: "Agenda",
+      version: "0.1.1",
+      kind: "app",
+      engine_api: ">=1.0.0",
+      entrypoint: "agenda-gpui.exe",
+      publisher: "kosmos",
+      permissions: [],
+      targets: [{ runtime: "standalone", os: ["windows"], arch: ["x86_64"] }],
+      data: { access: [], defines: [], mappings: [] },
+    },
+    archive_url: "https://github.com/makekosmos/agenda-gpui/releases/download/v0.1.1/agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip",
+    sha256: "b".repeat(64),
+    size: 9549390,
+    native: {
+      repository: "makekosmos/agenda-gpui",
+      release_tag: "v0.1.1",
+      target: "x86_64-pc-windows-msvc",
+      executable: "agenda-gpui.exe",
+    },
+  };
+}
+
+test("accepts a native app catalog entry", () => {
+  const c = copy();
+  c.packages.push(nativeEntry());
+  assert.equal(validateCatalog(c), true);
+});
+
+for (const [name, mutate, expected] of [
+  ["non-app native kind", (c) => { c.packages[1].manifest.kind = "source"; }, /app kind/],
+  ["native/entrypoint mismatch", (c) => { c.packages[1].manifest.entrypoint = "dist/index.html"; }, /must equal/],
+  ["unsafe native executable", (c) => { c.packages[1].native.executable = "../evil.exe"; c.packages[1].manifest.entrypoint = "../evil.exe"; }, /safe .exe/],
+  ["non-exe native executable", (c) => { c.packages[1].native.executable = "agenda.dll"; c.packages[1].manifest.entrypoint = "agenda.dll"; }, /safe .exe/],
+  ["native tag mismatch", (c) => { c.packages[1].native.release_tag = "v9.9.9"; }, /release_tag/],
+  ["native unknown target", (c) => { c.packages[1].native.target = "x86_64-unknown-linux-gnu"; }, /target/],
+  ["native missing standalone target", (c) => { c.packages[1].manifest.targets = [{ runtime: "worker", os: ["windows"], entrypoint: "w.exe" }]; }, /standalone/],
+]) {
+  test(`rejects ${name}`, () => {
+    const c = copy();
+    c.packages.push(nativeEntry());
+    mutate(c);
+    assert.throws(() => validateCatalog(c), expected);
+  });
+}
+
 test("rejects a tampered envelope signature", () => {
   const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519");
   const envelope = {

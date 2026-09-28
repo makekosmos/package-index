@@ -170,7 +170,9 @@ function requiredManifest(manifest, spec, provider) {
       !Array.isArray(manifest.data.access) || !Array.isArray(manifest.data.defines) || !Array.isArray(manifest.data.mappings)) {
     fail(`${provider}: archive manifest does not match the reviewed BOM contract`);
   }
-  const runtime = spec.kind === "app" ? "kosmos-host" : "worker";
+  // KOS-265: the hosted app runtime is gone — app packages declare a
+  // standalone target; worker packages keep runtime "worker".
+  const runtime = spec.kind === "app" ? "standalone" : "worker";
   if (!manifest.targets.some((target) => target?.runtime === runtime && Array.isArray(target.os) && target.os.includes("windows"))) {
     fail(`${provider}: archive manifest has no Windows ${runtime} target`);
   }
@@ -262,6 +264,74 @@ export async function inspectArchive(spec, archivePath, zipUtils, sequence) {
   };
 }
 
+// Map a BOM native `target` triple to the manifest arch field.
+const TARGET_ARCH = {
+  "x86_64-pc-windows-msvc": "x86_64",
+  "aarch64-pc-windows-msvc": "arm64",
+};
+
+/**
+ * Native app archives are release zips published by the component repository
+ * itself — no manifest.json inside. The catalog manifest is synthesized from
+ * the reviewed BOM entry, and the zip is screened with the same central-
+ * directory rules as .kspkg archives: no traversal, no symlinks, no reparse
+ * points, declared entrypoint must be a real PE for the declared target.
+ */
+export async function inspectNativeArchive(spec, archivePath, { readZip }) {
+  const bytes = await readFile(archivePath).catch(() => fail(`${spec.id}: archive is missing: ${spec.artifact.name}`));
+  if (spec.artifact.size !== undefined && bytes.length !== spec.artifact.size) fail(`${spec.id}: archive size mismatch`);
+  if (spec.artifact.sha256 !== undefined && hash(bytes) !== spec.artifact.sha256.toLowerCase()) {
+    fail(`${spec.id}: artifact SHA-256 mismatch`);
+  }
+  // Same two-view ZIP screening as .kspkg archives — no traversal, symlink,
+  // or reparse entries and the parser view must agree with the directory.
+  const central = zipCentralDirectory(bytes, spec.id);
+  safeArchivePath(spec.entrypoint, `${spec.id}.entrypoint`);
+  if (spec.icon !== undefined) safeArchivePath(spec.icon, `${spec.id}.icon`);
+  let entries;
+  try { entries = readZip(archivePath); } catch (error) { fail(`${spec.id}: invalid ZIP archive: ${error.message}`); }
+  if (entries.length !== central.length) fail(`${spec.id}: ZIP directory views disagree`);
+  const files = entries.filter((entry) => !entry.isDir);
+  for (const entry of central) {
+    const decoded = files.find((candidate) => candidate.name === entry.name);
+    if (entry.isDir) continue;
+    if (!decoded || decoded.data.length !== entry.uncompressedSize) fail(`${spec.id}: ZIP uncompressed size mismatch`);
+  }
+  const exe = files.find((entry) => entry.name === spec.entrypoint);
+  if (!exe) fail(`${spec.id}: release zip does not contain ${spec.entrypoint}`);
+  verifyPePlatform(exe.data, spec.entrypoint, spec.id);
+  if (spec.icon !== undefined && !files.some((entry) => entry.name === spec.icon))
+    fail(`${spec.id}: release zip does not contain icon ${spec.icon}`);
+  const manifest = {
+    schema_version: 2,
+    id: spec.manifest_id,
+    name: spec.name,
+    version: spec.version,
+    kind: "app",
+    engine_api: spec.engine_api,
+    entrypoint: spec.entrypoint,
+    ...(spec.icon === undefined ? {} : { icon: spec.icon }),
+    publisher: "kosmos",
+    permissions: [],
+    targets: [
+      { runtime: "standalone", os: ["windows"], arch: [TARGET_ARCH[spec.target]] },
+    ],
+    data: { access: [], defines: [], mappings: [] },
+  };
+  return {
+    manifest,
+    archive_url: spec.artifact.url,
+    sha256: hash(bytes),
+    size: bytes.length,
+    native: {
+      repository: spec.repository,
+      release_tag: spec.release_tag,
+      target: spec.target,
+      executable: spec.entrypoint,
+    },
+  };
+}
+
 export async function preparePublication({ bomPath, previousCatalogPath, previousEnvelopePath, previousSignaturesPath, artifactsDir, sourceCatalogPath, sequence, issuedAt, expiresAt, outDir }) {
   const bom = await loadBom(bomPath, { expectedSequence: sequence, allowPendingBuilds: true });
   const sourceCatalog = JSON.parse(await readFile(sourceCatalogPath, "utf8"));
@@ -275,8 +345,12 @@ export async function preparePublication({ bomPath, previousCatalogPath, previou
   const zipUtils = vendoredZipUtils;
   const resolvedEntries = [];
   for (const spec of bom.packages) {
-    const inspected = await inspectArchive(spec, path.join(path.resolve(artifactsDir), spec.artifact.name), zipUtils, sequence);
-    resolvedEntries.push({ ...spec, _manifest: inspected.manifest, artifact: {
+    const archivePath = path.join(path.resolve(artifactsDir), spec.artifact.name);
+    const inspected =
+      spec.kind === "native-app"
+        ? await inspectNativeArchive(spec, archivePath, zipUtils)
+        : await inspectArchive(spec, archivePath, zipUtils, sequence);
+    resolvedEntries.push({ ...spec, _manifest: inspected.manifest, _native: inspected.native, artifact: {
       name: spec.artifact.name,
       url: inspected.archive_url,
       sha256: inspected.sha256,
@@ -289,7 +363,11 @@ export async function preparePublication({ bomPath, previousCatalogPath, previou
     archive_url: entry.artifact.url,
     sha256: entry.artifact.sha256,
     size: entry.artifact.size,
+    ...(entry._native === undefined ? {} : { native: entry._native }),
   }));
+  // _native carries the published descriptor; strip it from the BOM like
+  // _manifest — both are publish artifacts, not review fields.
+  for (const entry of resolvedEntries) delete entry._native;
   // _manifest is an inspected archive detail, not part of the BOM contract.
   // Validate the public BOM after removing it so declarative field names such
   // as Huawei's `token` request field are not mistaken for embedded secrets.

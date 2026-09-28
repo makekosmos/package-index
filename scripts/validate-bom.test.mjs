@@ -11,16 +11,61 @@ const bomPath = path.join(root, "release", "bom.v1.json");
 const builder = await readFile(path.join(root, "scripts", "build-source-packages.mjs"), "utf8");
 
 test("checked-in BOM is v1 and contains all catalog package inputs", async () => {
-  const bom = await loadBom(bomPath, { expectedSequence: 22, allowPendingBuilds: true });
-  assert.equal(bom.packages.length, 12);
-  assert.equal(bom.packages.filter((entry) => entry.kind === "app").length, 5);
+  const bom = await loadBom(bomPath, { expectedSequence: 23, allowPendingBuilds: true });
+  assert.equal(bom.packages.length, 10);
+  assert.equal(bom.packages.filter((entry) => entry.kind === "app").length, 2);
   assert.equal(bom.packages.filter((entry) => entry.kind === "source").length, 7);
+  assert.equal(bom.packages.filter((entry) => entry.kind === "native-app").length, 1);
   assert.ok(bom.packages.every((entry) => /^[0-9a-f]{40}$/i.test(entry.ref)));
   assert.match(bom.source.core.ark_artifact.sha256, /^[0-9a-f]{64}$/);
 });
 
+test("the native-app entry pins the real agenda-gpui v0.1.1 release", async () => {
+  const bom = await loadBom(bomPath, { expectedSequence: 23, allowPendingBuilds: true });
+  const agenda = bom.packages.find((entry) => entry.id === "com.kosmos.agenda");
+  assert.equal(agenda.kind, "native-app");
+  assert.equal(agenda.repository, "makekosmos/agenda-gpui");
+  assert.equal(agenda.release_tag, "v0.1.1");
+  assert.equal(agenda.target, "x86_64-pc-windows-msvc");
+  assert.equal(agenda.entrypoint, "agenda-gpui.exe");
+  assert.equal(agenda.artifact.sha256, "6cfb801be93175d1b88f8fa7736a75420cfb7de3fe89f5569626892a05ab44e0");
+  assert.equal(agenda.artifact.size, 9549390);
+});
+
+test("legacy agenda/memoria/dictation kspkg ids are retired", async () => {
+  const bom = await loadBom(bomPath, { expectedSequence: 23, allowPendingBuilds: true });
+  assert.ok(bom.retired_package_ids.includes("com.kosmos.memoria"));
+  assert.ok(bom.retired_package_ids.includes("com.kosmos.dictation"));
+  assert.ok(!bom.packages.some((entry) => entry.id === "com.kosmos.memoria"));
+  assert.ok(!bom.packages.some((entry) => entry.id === "com.kosmos.dictation"));
+});
+
+test("native-app entries must be fully resolved and host the real release URL", async () => {
+  const pending = JSON.parse(await readFile(bomPath, "utf8"));
+  const native = pending.packages.find((entry) => entry.kind === "native-app");
+  delete native.artifact.sha256;
+  delete native.artifact.size;
+  assert.throws(() => validateBom(pending, { allowPendingBuilds: true }), /artifact\.sha256/);
+
+  const rehosted = JSON.parse(await readFile(bomPath, "utf8"));
+  const entry = rehosted.packages.find((item) => item.kind === "native-app");
+  entry.artifact.url = `https://github.com/makekosmos/package-index/releases/download/catalog-23/${entry.artifact.name}`;
+  assert.throws(() => validateBom(rehosted, { allowPendingBuilds: true }), /repository release asset/);
+
+  const drifted = JSON.parse(await readFile(bomPath, "utf8"));
+  const spec = drifted.packages.find((item) => item.kind === "native-app");
+  spec.target = "x86_64-unknown-linux-gnu";
+  assert.throws(() => validateBom(drifted, { allowPendingBuilds: true }), /native target/);
+
+  const mismatch = JSON.parse(await readFile(bomPath, "utf8"));
+  const item = mismatch.packages.find((pkg) => pkg.kind === "native-app");
+  item.release_tag = "v0.1.2";
+  item.artifact.url = item.artifact.url.replace("v0.1.1", "v0.1.2");
+  assert.throws(() => validateBom(mismatch, { allowPendingBuilds: true }), /release_tag must equal/);
+});
+
 test("reviewed BOM pins the authorized Store commit and envelope sequence", async () => {
-  const bom = await loadBom(bomPath, { expectedSequence: 22, allowPendingBuilds: true });
+  const bom = await loadBom(bomPath, { expectedSequence: 23, allowPendingBuilds: true });
   assert.equal(bom.source.store.commit, "2e6afcbc6c27514e9841a260005d92cb81e038c6");
   assert.equal(bom.catalog.store_sequence, 16);
 });
@@ -147,8 +192,10 @@ test("entrypoint and icon must satisfy the archive path contract", async () => {
 
 test("package artifact names must be unique and disjoint from declared artifacts", async () => {
   const bom = JSON.parse(await readFile(bomPath, "utf8"));
-  bom.packages[1].artifact.name = bom.packages[0].artifact.name;
-  bom.packages[1].artifact.url = `https://github.com/makekosmos/dictation/releases/download/v0.2.5/${bom.packages[0].artifact.name}`;
+  const sources = bom.packages.filter((entry) => entry.kind === "source");
+  sources[1].artifact.name = sources[0].artifact.name;
+  if (sources[1].artifact.url_template)
+    sources[1].artifact.url_template = sources[0].artifact.url_template;
   assert.throws(() => validateBom(bom, { allowPendingBuilds: true }), /duplicate artifact name/);
 
   const colliding = JSON.parse(await readFile(bomPath, "utf8"));

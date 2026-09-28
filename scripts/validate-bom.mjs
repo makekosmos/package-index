@@ -50,7 +50,15 @@ function rejectSecrets(value) {
 // assets — either way the release ends up inconsistent with the catalog that
 // attested the artifact.
 const PACKAGE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.kspkg$/;
+const NATIVE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.zip$/;
 const RELEASE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+// Target triples a native-app BOM entry may declare — the catalog carries
+// them verbatim and the Engine installs only entries matching the host.
+const NATIVE_TARGETS = new Set([
+  "x86_64-pc-windows-msvc",
+  "aarch64-pc-windows-msvc",
+]);
 
 // Entrypoint and icon names become archive member paths — and the source
 // builder resolves them with path.join() inside packages/<provider>/ — so the
@@ -70,11 +78,17 @@ function safePackagePath(value, label) {
 function artifact(spec, { allowPendingBuilds }) {
   if (!object(spec.artifact)) fail(`${spec.id}: artifact is required`);
   const name = requiredString(spec.artifact.name, `${spec.id}.artifact.name`);
-  if (!PACKAGE_ARTIFACT_NAME.test(name)) fail(`${spec.id}: artifact name must be a flat .kspkg basename`);
+  const namePattern = spec.kind === "native-app" ? NATIVE_ARTIFACT_NAME : PACKAGE_ARTIFACT_NAME;
+  if (!namePattern.test(name)) {
+    fail(`${spec.id}: artifact name must be a flat ${spec.kind === "native-app" ? ".zip" : ".kspkg"} basename`);
+  }
   const url = spec.artifact.url ?? spec.artifact.url_template;
   if (typeof url !== "string" || !url.startsWith("https://")) fail(`${spec.id}: artifact URL must be HTTPS`);
   if (/\/(?:latest|main|master)(?:\/|$)/i.test(url)) fail(`${spec.id}: artifact URL must be immutable`);
-  const pending = spec.kind === "source" && spec.build && (spec.artifact.sha256 == null || spec.artifact.size == null);
+  // Native app artifacts are always resolved — a pending hash would publish
+  // a signed entry that installs bytes nobody reviewed.
+  const pending =
+    spec.kind === "source" && spec.build && (spec.artifact.sha256 == null || spec.artifact.size == null);
   if (pending && allowPendingBuilds) {
     // A field that is declared is validated even while the build is pending —
     // the pending exemption covers absent metadata, not malformed metadata.
@@ -177,7 +191,7 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
     if (!SEMVER.test(requiredString(spec.version, `${id}.version`))) fail(`${id}: invalid version`);
     requiredString(spec.manifest_id, `${id}.manifest_id`);
     if (spec.id !== spec.manifest_id) fail(`${id}: id and manifest_id must match`);
-    if (!["app", "source"].includes(spec.kind)) fail(`${id}: invalid kind`);
+    if (!["app", "source", "native-app"].includes(spec.kind)) fail(`${id}: invalid kind`);
     if (!engineCompatible(spec.engine_api, bom.compatibility.engine_api)) fail(`${id}: incompatible engine API`);
     requiredString(spec.repository, `${id}.repository`);
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(spec.repository)) fail(`${id}: invalid repository`);
@@ -188,10 +202,28 @@ export function validateBom(bom, { expectedSequence, allowPendingBuilds = false 
         fail(`${id}: source repository/ref must match a pinned source repository`);
       }
     }
-    requiredString(spec.entrypoint, `${id}.entrypoint`);
-    requiredString(spec.icon, `${id}.icon`);
-    safePackagePath(spec.entrypoint, `${id}.entrypoint`);
-    safePackagePath(spec.icon, `${id}.icon`);
+    if (spec.kind === "native-app") {
+      // The catalog synthesizes the manifest from the BOM entry: name is the
+      // display name, entrypoint is the exe inside the release zip.
+      requiredString(spec.name, `${id}.name`);
+      if (requiredString(spec.name, `${id}.name`).length > 128) fail(`${id}: name is too long`);
+      if (!spec.target || !NATIVE_TARGETS.has(spec.target)) fail(`${id}: native target is invalid`);
+      const releaseTag = requiredString(spec.release_tag, `${id}.release_tag`);
+      if (releaseTag !== `v${spec.version}`) fail(`${id}: release_tag must equal v<version>`);
+      if (!/\.exe$/i.test(spec.entrypoint ?? "")) fail(`${id}: entrypoint must name an .exe`);
+      safePackagePath(spec.entrypoint, `${id}.entrypoint`);
+      if (spec.icon !== undefined) safePackagePath(spec.icon, `${id}.icon`);
+      // Native artifacts stay at the component repository's release — the
+      // catalog links them, they are never re-hosted under package-index.
+      const expectedUrl = `https://github.com/${spec.repository}/releases/download/${releaseTag}/${spec.artifact.name}`;
+      if (spec.artifact.url !== expectedUrl)
+        fail(`${id}: native artifact URL must be the repository release asset`);
+    } else {
+      requiredString(spec.entrypoint, `${id}.entrypoint`);
+      requiredString(spec.icon, `${id}.icon`);
+      safePackagePath(spec.entrypoint, `${id}.entrypoint`);
+      safePackagePath(spec.icon, `${id}.icon`);
+    }
     // The catalog contract requires app entrypoints under dist/, and the
     // builder maps a source entrypoint to `cargo --bin` output `<name>.exe` —
     // paths that cannot satisfy those contracts must fail here, at review,
@@ -297,7 +329,9 @@ async function main(argv = process.argv) {
     await verifyArtifacts(bom, path.resolve(args["artifacts-dir"]));
   }
   if (args["print-downloads"]) {
-    for (const spec of bom.packages.filter((entry) => entry.kind === "app")) {
+    // Native-app zips download from the component repo release exactly like
+    // prebuilt app .kspkg archives do.
+    for (const spec of bom.packages.filter((entry) => entry.kind === "app" || entry.kind === "native-app")) {
       console.log([spec.repository, spec.release_tag, spec.ref, spec.artifact.name].join("\t"));
     }
   } else {

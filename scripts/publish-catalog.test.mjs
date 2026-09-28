@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { buildCatalogInput, inspectArchive, verifyPreviousPublication } from "./publish-catalog.mjs";
+import { buildCatalogInput, inspectArchive, inspectNativeArchive, verifyPreviousPublication } from "./publish-catalog.mjs";
 import { readZip, writeZip } from "./test-zip-utils.mjs";
 
 const fixture = JSON.parse(await readFile(new URL("../fixtures/catalog-input.json", import.meta.url), "utf8"));
@@ -104,7 +104,7 @@ function completeManifest(spec) {
   return {
     schema_version: 2, id: spec.manifest_id, name: "Fixture", version: spec.version, kind: spec.kind,
     engine_api: spec.engine_api, entrypoint: spec.entrypoint, icon: spec.icon, publisher: "kosmos",
-    permissions: [], targets: spec.targets ?? [{ runtime: spec.kind === "app" ? "kosmos-host" : "worker", os: ["windows"] }], data: { access: [], defines: [], mappings: [] },
+    permissions: [], targets: spec.targets ?? [{ runtime: spec.kind === "app" ? "standalone" : "worker", os: ["windows"] }], data: { access: [], defines: [], mappings: [] },
   };
 }
 
@@ -165,11 +165,11 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
     const inspectedApp = await inspectArchive(appSpec, app, { readZip }, 8);
     assert.equal(inspectedApp.archive_url, "https://github.com/makekosmos/package-index/releases/download/catalog-8/app.kspkg");
     const unsafeWorker = path.join(dir, "unsafe-worker.kspkg");
-    const unsafeWorkerSpec = archiveSpec({ kind: "app", entrypoint: "dist/index.html", build: undefined, artifact: { name: "unsafe-worker.kspkg" }, targets: [{ runtime: "kosmos-host", os: ["windows"] }, { runtime: "worker", os: ["windows"], entrypoint: "../escape.exe" }] });
+    const unsafeWorkerSpec = archiveSpec({ kind: "app", entrypoint: "dist/index.html", build: undefined, artifact: { name: "unsafe-worker.kspkg" }, targets: [{ runtime: "standalone", os: ["windows"] }, { runtime: "worker", os: ["windows"], entrypoint: "../escape.exe" }] });
     await writeArchive(unsafeWorker, unsafeWorkerSpec);
     await assert.rejects(() => inspectArchive(unsafeWorkerSpec, unsafeWorker, { readZip }, 8), /unsafe/);
     const nonPeWorker = path.join(dir, "non-pe-worker.kspkg");
-    const nonPeWorkerSpec = archiveSpec({ kind: "app", entrypoint: "dist/index.html", build: undefined, artifact: { name: "non-pe-worker.kspkg" }, targets: [{ runtime: "kosmos-host", os: ["windows"] }, { runtime: "worker", os: ["windows"], entrypoint: "worker/fixture-worker.exe" }] });
+    const nonPeWorkerSpec = archiveSpec({ kind: "app", entrypoint: "dist/index.html", build: undefined, artifact: { name: "non-pe-worker.kspkg" }, targets: [{ runtime: "standalone", os: ["windows"] }, { runtime: "worker", os: ["windows"], entrypoint: "worker/fixture-worker.exe" }] });
     writeZip(nonPeWorker, [
       { name: "dist/", data: Buffer.alloc(0), externalAttributes: 0x10 },
       { name: "dist/index.html", data: Buffer.from("app") },
@@ -221,6 +221,121 @@ test("archive policy rejects traversal, collisions, and extra files", async () =
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+function nativeSpec(overrides = {}) {
+  return {
+    id: "com.kosmos.agenda",
+    manifest_id: "com.kosmos.agenda",
+    kind: "native-app",
+    name: "Agenda",
+    engine_api: ">=1.0.0",
+    version: "0.1.1",
+    repository: "makekosmos/agenda-gpui",
+    ref: "a".repeat(40),
+    release_tag: "v0.1.1",
+    target: "x86_64-pc-windows-msvc",
+    entrypoint: "agenda-gpui.exe",
+    artifact: {
+      name: "agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip",
+      url: "https://github.com/makekosmos/agenda-gpui/releases/download/v0.1.1/agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip",
+    },
+    ...overrides,
+  };
+}
+
+test("native-app archive inspection synthesizes the catalog entry", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "kosmos-native-"));
+  try {
+    const spec = nativeSpec();
+    const file = path.join(dir, spec.artifact.name);
+    writeZip(file, [
+      { name: "agenda-gpui.exe", data: peFixture() },
+      { name: "LICENSE.txt", data: Buffer.from("license") },
+    ]);
+    const inspected = await inspectNativeArchive(spec, file, { readZip });
+    assert.equal(inspected.manifest.kind, "app");
+    assert.equal(inspected.manifest.id, "com.kosmos.agenda");
+    assert.equal(inspected.manifest.entrypoint, "agenda-gpui.exe");
+    assert.deepEqual(inspected.manifest.targets, [
+      { runtime: "standalone", os: ["windows"], arch: ["x86_64"] },
+    ]);
+    // The archive URL is the component repository release asset — native
+    // artifacts are never re-hosted under package-index.
+    assert.equal(inspected.archive_url, spec.artifact.url);
+    assert.equal(inspected.native.repository, "makekosmos/agenda-gpui");
+    assert.equal(inspected.native.release_tag, "v0.1.1");
+    assert.equal(inspected.native.target, "x86_64-pc-windows-msvc");
+    assert.equal(inspected.native.executable, "agenda-gpui.exe");
+
+    // Declared sha256/size are verified, never trusted.
+    const statted = (await import("node:fs")).statSync(file);
+    const hashed = spec.artifact && { ...spec.artifact, sha256: crypto.createHash("sha256").update(await readFile(file)).digest("hex"), size: statted.size };
+    const pinned = nativeSpec({ artifact: { ...spec.artifact, ...hashed } });
+    await assert.doesNotReject(() => inspectNativeArchive(pinned, file, { readZip }));
+    const wrong = nativeSpec({ artifact: { ...spec.artifact, sha256: "0".repeat(64) } });
+    await assert.rejects(() => inspectNativeArchive(wrong, file, { readZip }), /SHA-256/);
+    const wrongSize = nativeSpec({ artifact: { ...spec.artifact, size: statted.size + 1 } });
+    await assert.rejects(() => inspectNativeArchive(wrongSize, file, { readZip }), /size/);
+
+    // Missing declared executable and non-PE content both fail.
+    const missing = path.join(dir, "missing.zip");
+    writeZip(missing, [{ name: "other.exe", data: peFixture() }]);
+    await assert.rejects(() => inspectNativeArchive(nativeSpec(), missing, { readZip }), /does not contain/);
+    const notPe = path.join(dir, "notpe.zip");
+    writeZip(notPe, [{ name: "agenda-gpui.exe", data: Buffer.from("not a PE") }]);
+    await assert.rejects(() => inspectNativeArchive(nativeSpec(), notPe, { readZip }), /PE executable/);
+
+    // Traversal members fail the central-directory screen.
+    const traversal = path.join(dir, "traversal.zip");
+    writeZip(traversal, [
+      { name: "agenda-gpui.exe", data: peFixture() },
+      { name: "../escape.exe", data: Buffer.from("x") },
+    ]);
+    await assert.rejects(() => inspectNativeArchive(nativeSpec(), traversal, { readZip }), /unsafe|directory/);
+
+    // A declared icon must exist in the archive.
+    const withIcon = nativeSpec({ icon: "icon.png" });
+    await assert.rejects(() => inspectNativeArchive(withIcon, file, { readZip }), /icon/);
+    const iconFile = path.join(dir, "iconed.zip");
+    writeZip(iconFile, [
+      { name: "agenda-gpui.exe", data: peFixture() },
+      { name: "icon.png", data: Buffer.from("icon") },
+    ]);
+    const iconed = await inspectNativeArchive(withIcon, iconFile, { readZip });
+    assert.equal(iconed.manifest.icon, "icon.png");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("native replacements carry the descriptor into the catalog input", () => {
+  const manifest = structuredClone(fixture.packages[0].manifest);
+  manifest.id = "com.kosmos.agenda";
+  manifest.version = "0.1.1";
+  manifest.entrypoint = "agenda-gpui.exe";
+  manifest.targets = [{ runtime: "standalone", os: ["windows"], arch: ["x86_64"] }];
+  const replacement = {
+    manifest,
+    archive_url: "https://github.com/makekosmos/agenda-gpui/releases/download/v0.1.1/a.zip",
+    sha256: "c".repeat(64),
+    size: 10,
+    native: {
+      repository: "makekosmos/agenda-gpui",
+      release_tag: "v0.1.1",
+      target: "x86_64-pc-windows-msvc",
+      executable: "agenda-gpui.exe",
+    },
+  };
+  const next = buildCatalogInput(fixture, [replacement], {
+    sequence: 8,
+    issuedAt: "2026-08-29T00:00:00Z",
+    expiresAt: "2026-09-29T00:00:00Z",
+    retiredPackageIds: [],
+    engineApiVersion: "1.5.0",
+  });
+  const published = next.packages.find((entry) => entry.native);
+  assert.equal(published.native.repository, "makekosmos/agenda-gpui");
 });
 
 test("a worker target declaring the package entrypoint is not double-counted", async () => {
@@ -322,7 +437,7 @@ test("Windows-aliased archive names cannot evade executable screening", async ()
         build: undefined,
         artifact: { name: `${label.replace(" ", "-")}.kspkg` },
         targets: [
-          { runtime: "kosmos-host", os: ["windows"] },
+          { runtime: "standalone", os: ["windows"] },
           { runtime: "worker", os: ["windows"], entrypoint },
         ],
       });
@@ -344,7 +459,7 @@ test("Windows-aliased archive names cannot evade executable screening", async ()
       build: undefined,
       artifact: { name: "dll-worker.kspkg" },
       targets: [
-        { runtime: "kosmos-host", os: ["windows"] },
+        { runtime: "standalone", os: ["windows"] },
         { runtime: "worker", os: ["windows"], entrypoint: "worker/helper.dll" },
       ],
     });

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "state": "candidate",
-  "id": "kosmos-package-catalog-22",
+  "id": "kosmos-package-catalog-23",
   "release": {
     "version": "0.9.36",
     "channel": "production",
@@ -60,14 +60,17 @@
     "package_schema": 2
   },
   "catalog": {
-    "sequence": 22,
-    "previous_sequence": 21,
+    "sequence": 23,
+    "previous_sequence": 22,
     "store_sequence": 16,
     "channel": "production",
     "signing_key_id": "kosmos-release-2026",
     "public_key": "Mr7fRkGegxRpquVQPEeMxFRMPB3tT9pDJ49ydDmomDQ="
   },
-  "retired_package_ids": [],
+  "retired_package_ids": [
+    "com.kosmos.dictation",
+    "com.kosmos.memoria"
+  ],
   "packages": [
     {
       "id": "com.kosmos.arcadia",
@@ -85,60 +88,6 @@
         "url": "https://github.com/makekosmos/arcadia/releases/download/v0.1.11/arcadia-0.1.11.kspkg",
         "sha256": "c2b820511c97caf26696cbeb5db15f31c98617fac7cadc976162b5357f0f9f5c",
         "size": 2746695
-      }
-    },
-    {
-      "id": "com.kosmos.dictation",
-      "manifest_id": "com.kosmos.dictation",
-      "kind": "app",
-      "engine_api": ">=1.0.0",
-      "version": "0.2.5",
-      "repository": "makekosmos/dictation",
-      "ref": "06627ebcb0339c2d4048753e509e91b062ec0337",
-      "release_tag": "v0.2.5",
-      "entrypoint": "dist/index.html",
-      "icon": "icon.png",
-      "artifact": {
-        "name": "dictation-0.2.5.kspkg",
-        "url": "https://github.com/makekosmos/dictation/releases/download/v0.2.5/dictation-0.2.5.kspkg",
-        "sha256": "d14f955dc2015a0d00bc2af2b3b4abfb301bd80b82da31b7478fb8ae4921ab82",
-        "size": 99885416
-      }
-    },
-    {
-      "id": "com.kosmos.agenda",
-      "manifest_id": "com.kosmos.agenda",
-      "kind": "app",
-      "engine_api": ">=1.0.0",
-      "version": "0.2.7",
-      "repository": "makekosmos/agenda",
-      "ref": "46abff4b4b72d7621d8aa22f5f6bf782694ed025",
-      "release_tag": "v0.2.7",
-      "entrypoint": "dist/index.html",
-      "icon": "icon.png",
-      "artifact": {
-        "name": "agenda-0.2.7.kspkg",
-        "url": "https://github.com/makekosmos/agenda/releases/download/v0.2.7/agenda-0.2.7.kspkg",
-        "sha256": "4d425849e5ac2b8ab93818ab1aeaa65de9066304a37b1e2d585814dc3539c68c",
-        "size": 771710
-      }
-    },
-    {
-      "id": "com.kosmos.memoria",
-      "manifest_id": "com.kosmos.memoria",
-      "kind": "app",
-      "engine_api": ">=1.0.0",
-      "version": "0.6.8",
-      "repository": "makekosmos/memoria",
-      "ref": "88bbcef66e8e748c184abf22611d4d70d2dee372",
-      "release_tag": "v0.6.8",
-      "entrypoint": "dist/index.html",
-      "icon": "icon.png",
-      "artifact": {
-        "name": "memoria-0.6.8.kspkg",
-        "url": "https://github.com/makekosmos/memoria/releases/download/v0.6.8/memoria-0.6.8.kspkg",
-        "sha256": "480a7121436e19c47a003ad416769cb81627dee375c76acae1d2d213d22870e0",
-        "size": 2895051
       }
     },
     {
@@ -290,6 +239,25 @@
       "artifact": {
         "name": "com.kosmos.huawei-health-0.1.0.kspkg",
         "url_template": "https://github.com/makekosmos/package-index/releases/download/catalog-{sequence}/com.kosmos.huawei-health-0.1.0.kspkg"
+      }
+    },
+    {
+      "id": "com.kosmos.agenda",
+      "manifest_id": "com.kosmos.agenda",
+      "kind": "native-app",
+      "name": "Agenda",
+      "engine_api": ">=1.0.0",
+      "version": "0.1.1",
+      "repository": "makekosmos/agenda-gpui",
+      "ref": "551021e44abab40fc581e7afecdef5f5a4d1f546",
+      "release_tag": "v0.1.1",
+      "target": "x86_64-pc-windows-msvc",
+      "entrypoint": "agenda-gpui.exe",
+      "artifact": {
+        "name": "agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip",
+        "url": "https://github.com/makekosmos/agenda-gpui/releases/download/v0.1.1/agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip",
+        "sha256": "6cfb801be93175d1b88f8fa7736a75420cfb7de3fe89f5569626892a05ab44e0",
+        "size": 9549390
       }
     }
   ],

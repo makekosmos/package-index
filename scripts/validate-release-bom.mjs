@@ -25,8 +25,9 @@ export function validateReleaseBom(bom) {
     if (!/^makekosmos\/[a-z0-9-]+$/.test(item.repository)) throw new Error(`${item.id}: repository must be an explicit makekosmos repo`);
     if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(item.release_tag)) throw new Error(`${item.id}: release tag must be immutable semver`);
     const archiveName = item.artifact.name;
-    if (typeof archiveName !== "string" || archiveName.includes("/") || archiveName.includes("\\") || !archiveName.endsWith(".kspkg")) {
-      throw new Error(`${item.id}: archive name must be a flat .kspkg file`);
+    const extension = item.kind === "native-app" ? ".zip" : ".kspkg";
+    if (typeof archiveName !== "string" || archiveName.includes("/") || archiveName.includes("\\") || !archiveName.endsWith(extension)) {
+      throw new Error(`${item.id}: archive name must be a flat ${extension} file`);
     }
   }
   return bom;
