@@ -43,6 +43,11 @@ for (const file of files) {
       }
     }
     if (!value) continue; // `uses:` with no resolvable ref cannot run an action
+    // YAML quoted scalars spell the same action — `uses: "a/b@<sha>"` pins
+    // identically — so fold one pair of matching quotes before the checks;
+    // otherwise the closing quote lands inside the captured ref and the pin
+    // check rejects a compliant workflow.
+    value = value.replace(/^(["'])([\s\S]*)\1$/, "$2");
     // Local actions (`uses: ./path`) run content from the checked-out ref and
     // carry no `@` pin; everything else must pin a full commit SHA.
     if (value.startsWith("./")) continue;

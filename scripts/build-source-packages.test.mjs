@@ -39,9 +39,12 @@ function manifestFixture() {
     id: "com.kosmos.fixture",
     version: "1.0.0",
     kind: "source",
+    engine_api: ">=1.0.0",
+    name: "Fixture",
     publisher: "kosmos",
     entrypoint: "fixture-worker.exe",
     icon: "icon.png",
+    data: { access: [], defines: [], mappings: [] },
     permissions: [
       { capability: "network", scopes: ["https://fixture.example/"] },
       { capability: "ark.write", scopes: ["fixture"] },
@@ -138,6 +141,17 @@ test("duplicate or malformed permission grants fail closed", async () => {
       ["duplicate integration setting key", (m) => {
         m.integration.settings.push({ ...m.integration.settings[0] });
       }, /duplicate integration setting key/],
+      // Identity fields publish verifies against the BOM — engine_api, name,
+      // and the data contract — must hold at build time, not mid-publish.
+      ["engine_api drifted from the BOM", (m) => {
+        m.engine_api = ">=99.0.0";
+      }, /invalid source manifest identity/],
+      ["missing manifest name", (m) => {
+        delete m.name;
+      }, /invalid source manifest identity/],
+      ["missing manifest data contract", (m) => {
+        delete m.data;
+      }, /invalid source manifest identity/],
     ]) {
       const sourceRoot = path.join(dir, `checkout-${label.replaceAll(" ", "-")}`);
       await writePackage(sourceRoot);

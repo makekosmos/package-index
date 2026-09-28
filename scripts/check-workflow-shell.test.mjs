@@ -92,6 +92,21 @@ for (const [label, step] of [
   ["ANSI octal-escaped command word", "      - run: |\n          set -Eeuo pipefail\n          r$'\\155' -rf \"$RUNNER_TEMP\"\n"],
   ["ANSI unicode-escaped command word", "      - run: |\n          set -Eeuo pipefail\n          r$'\\u006d' -rf \"$RUNNER_TEMP\"\n"],
   ["ANSI escape in flag cluster", "      - run: |\n          set -Eeuo pipefail\n          rm -$'\\x72\\x66' \"$RUNNER_TEMP\"\n"],
+  // Expansion-bearing words cannot be screened statically: a bare `$FLAGS`
+  // operand expands to `-rf` as a single word, and a command word built from
+  // substitution, variables, braces, or globs execs `rm` without a literal
+  // `rm` token for the scan to find. All are unverifiable — not trusted.
+  ["expansion operand carries the flags", "      - run: |\n          set -Eeuo pipefail\n          rm $FLAGS\n"],
+  ["quoted expansion operand carries the flags", "      - run: |\n          set -Eeuo pipefail\n          rm \"$FLAGS\"\n"],
+  ["expansion operand after a partial cluster", "      - run: |\n          set -Eeuo pipefail\n          rm -r $F \"$RUNNER_TEMP\"\n"],
+  ["variable command word", "      - run: |\n          set -Eeuo pipefail\n          a=rm\n          $a -rf \"$RUNNER_TEMP\"\n"],
+  ["substituted command word", "      - run: |\n          set -Eeuo pipefail\n          $(echo r)m -rf \"$RUNNER_TEMP\"\n"],
+  ["braced command word", "      - run: |\n          set -Eeuo pipefail\n          r{,}m -rf \"$RUNNER_TEMP\"\n"],
+  ["brace expansion in the flag cluster", "      - run: |\n          set -Eeuo pipefail\n          rm -r{,f} \"$RUNNER_TEMP\"\n"],
+  ["globbed command word", "      - run: |\n          set -Eeuo pipefail\n          r? -rf \"$RUNNER_TEMP\"\n"],
+  ["expansion command word behind a keyword", "      - run: |\n          set -Eeuo pipefail\n          if $cmd -rf \"$RUNNER_TEMP\"; then echo x; fi\n"],
+  ["expansion command word behind eval", "      - run: |\n          set -Eeuo pipefail\n          eval $x -rf \"$RUNNER_TEMP\"\n"],
+  ["backtick command word", "      - run: |\n          set -Eeuo pipefail\n          `echo r`m -rf \"$RUNNER_TEMP\"\n"],
   // `run:` may leave its value to a deeper line — `run:` followed by an
   // indented `|` is still a block scalar to the shell, so the strict-mode
   // requirement and the literal `\<newline>` continuation semantics both
@@ -120,17 +135,23 @@ for (const [label, step] of [
   ["single-line run", "      - run: echo ok\n"],
   ["anchored strict-mode block", "      - &a run: |\n          set -Eeuo pipefail\n          echo ok\n"],
   ["two compliant blocks", "      - run: |\n          set -Eeuo pipefail\n          echo one\n      - run: |\n          set -Eeuo pipefail\n          echo two\n"],
-  // Deletion without the recursive+force combination stays allowed.
-  ["plain rm of a file", "      - run: |\n          set -Eeuo pipefail\n          rm -f \"$RUNNER_TEMP/file\"\n"],
-  ["recursive delete without force", "      - run: |\n          set -Eeuo pipefail\n          rm -r \"$RUNNER_TEMP/dir\"\n"],
-  ["long force without recursive", "      - run: |\n          set -Eeuo pipefail\n          rm --force \"$RUNNER_TEMP/file\"\n"],
-  ["long recursive without force", "      - run: |\n          set -Eeuo pipefail\n          rm --recursive \"$RUNNER_TEMP/dir\"\n"],
+  // Deletion without the recursive+force combination stays allowed; expansion
+  // operands sit behind an explicit `--` guard where they cannot expand into
+  // flag spellings.
+  ["plain rm of a file", "      - run: |\n          set -Eeuo pipefail\n          rm -f -- \"$RUNNER_TEMP/file\"\n"],
+  ["recursive delete without force", "      - run: |\n          set -Eeuo pipefail\n          rm -r -- \"$RUNNER_TEMP/dir\"\n"],
+  ["long force without recursive", "      - run: |\n          set -Eeuo pipefail\n          rm --force -- \"$RUNNER_TEMP/file\"\n"],
+  ["long recursive without force", "      - run: |\n          set -Eeuo pipefail\n          rm --recursive -- \"$RUNNER_TEMP/dir\"\n"],
   ["end-of-options before -rf", "      - run: |\n          set -Eeuo pipefail\n          rm -- \"$RUNNER_TEMP/-rf\"\n"],
   ["rm without recursive flag sharing a line", "      - run: |\n          set -Eeuo pipefail\n          rm out.txt && echo done\n"],
   // Indentation beyond the block indent survives as real whitespace in the
   // shell input, so `rm -r\<newline>  f` is `rm -r` with a `f` operand —
   // recursive without force, not recursive force deletion.
-  ["continuation line indented past the block", "      - run: |\n          set -Eeuo pipefail\n          rm -r\\\n            f \"$RUNNER_TEMP/file\"\n"],
+  ["continuation line indented past the block", "      - run: |\n          set -Eeuo pipefail\n          rm -r -- \\\n            f \"$RUNNER_TEMP/file\"\n"],
+  // Expansion operands of commands that cannot resolve to `rm` stay allowed,
+  // and assignments alone are not commands.
+  ["expansion args of a literal command", "      - run: |\n          set -Eeuo pipefail\n          echo $x -rf\n"],
+  ["assignments and a literal command", "      - run: |\n          set -Eeuo pipefail\n          a=rm\n          IFS=$'\\t' read -r x\n"],
   // A block scalar may also start on the line after `run:` — the same strict
   // mode and allowed-deletion rules apply to that spelling.
   ["next-line block scalar with strict mode", "      - run:\n          |\n            set -Eeuo pipefail\n            echo ok\n"],

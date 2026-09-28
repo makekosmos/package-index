@@ -30,6 +30,52 @@ const STRICT_MODE = /^[ ]*set -Eeuo pipefail[ ]*$/m;
 // also scanned with quotes and escapes folded.
 const ANSI_C_SIMPLE = { a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" };
 
+// Tokens the shell rewrites through expansion cannot be screened statically:
+// parameter/command substitution, brace expansion, tilde, and globs can all
+// deliver `rm` or `-rf` at exec time (`rm $FLAGS`, `r{,}m -rf`, `$(echo r)m
+// -rf`, `${x}m -rf`). An expansion-bearing token is unverifiable both in the
+// command word — where `matchAll(/\brm\b/)` never sees a literal `rm` — and
+// in flag position before an explicit `--` operand guard.
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*(\+)?=/;
+// Shell keywords and command runners hand the next word to the command
+// position — `if $x -rf`, `sudo $(x)m -rf`, `eval $x` — so the scan walks past
+// them (and `VAR=value` prefixes) to find the word the shell resolves.
+const COMMAND_PREFIX = new Set([
+  "if", "then", "elif", "else", "do", "while", "until", "for", "select", "case", "time", "!", "{", "}", "(", ")",
+  "command", "builtin", "exec", "coproc", "eval", "source", ".", "sudo", "doas", "env", "xargs",
+  "nice", "nohup", "timeout", "stdbuf", "ionice", "chrt", "taskset", "watch", "setsid", "flock",
+]);
+
+function expansionWord(token) {
+  return token.startsWith("~") || /[$`{?*]/.test(token);
+}
+
+// "deletion" when the token list statically resolves to recursive+force
+// options, "unverifiable" when an expansion-bearing token reaches flag
+// position, "safe" otherwise. `--` ends flag parsing: expansions after it are
+// operands and can stay (`rm -f -- "$VAR"`).
+function flagsVerdict(tokens) {
+  let recursive = false;
+  let force = false;
+  for (const raw of tokens) {
+    const token = unquoteToken(raw);
+    if (token === "--") break;
+    if (/^[$`{?*]/.test(token) || (token.startsWith("-") && /[$`\\{?*~]/.test(token))) return "unverifiable";
+    if (token.startsWith("--")) {
+      const word = token.slice(2);
+      if (word && "recursive".startsWith(word)) recursive = true;
+      if (word && "force".startsWith(word)) force = true;
+      continue;
+    }
+    const short = /^-([a-zA-Z]+)$/.exec(token);
+    if (short) {
+      if (/[rR]/.test(short[1])) recursive = true;
+      if (/f/.test(short[1])) force = true;
+    }
+  }
+  return recursive && force ? "deletion" : "safe";
+}
+
 // `$'...'` ANSI-C quoting resolves `\xHH`, `\uHHHH`, `\UHHHHHHHH`, `\ooo`
 // octal, `\cX` control, and single-letter escapes statically — decoding them
 // before quote folding keeps `r$'\x6d'` and `-$'\x72\x66'` visible to the
@@ -83,25 +129,18 @@ function isForceRecursiveDelete(text, literal) {
     for (const command of new Set([line, unquoteToken(line)])) {
       for (const match of command.matchAll(/\brm\b/g)) {
         const segment = command.slice(match.index).replace(SHELL_REDIRECTION, " ").split(/[|&;]/, 1)[0];
-        let recursive = false;
-        let force = false;
-        for (const raw of segment.trim().split(/\s+/).slice(1)) {
-          const token = unquoteToken(raw);
-          if (token === "--") break;
-          if (/^-.*[$`\\]/.test(token)) return true;
-          if (token.startsWith("--")) {
-            const word = token.slice(2);
-            if (word && "recursive".startsWith(word)) recursive = true;
-            if (word && "force".startsWith(word)) force = true;
-            continue;
-          }
-          const short = /^-([a-zA-Z]+)$/.exec(token);
-          if (short) {
-            if (/[rR]/.test(short[1])) recursive = true;
-            if (/f/.test(short[1])) force = true;
-          }
-        }
-        if (recursive && force) return true;
+        if (flagsVerdict(segment.trim().split(/\s+/).slice(1)) !== "safe") return true;
+      }
+      // A literal `rm` is not required for recursive force deletion: a command
+      // word that resolves through expansion executes it just the same, so an
+      // expansion-bearing command word combined with recursive+force flags is
+      // unverifiable too.
+      for (const segment of command.replace(SHELL_REDIRECTION, " ").split(/[|&;]/)) {
+        const tokens = segment.trim().split(/\s+/).filter(Boolean);
+        let head = 0;
+        while (head < tokens.length && (ASSIGNMENT.test(tokens[head]) || COMMAND_PREFIX.has(unquoteToken(tokens[head])))) head += 1;
+        if (head < tokens.length && expansionWord(unquoteToken(tokens[head])) &&
+            flagsVerdict(tokens.slice(head + 1)) !== "safe") return true;
       }
     }
   }
